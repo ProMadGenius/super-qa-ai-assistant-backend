@@ -177,7 +177,17 @@ describe('Document Regenerator', () => {
         finishReason: 'stop',
         usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
         warnings: [],
-        request: { model: 'mocked-openai-model', prompt: '', schema: {} }
+        request: {},
+        response: {
+          id: 'mock-response-id',
+          timestamp: new Date(),
+          modelId: 'mock-model-id',
+          headers: {}
+        },
+        providerMetadata: {},
+        experimental_providerMetadata: {},
+        toJsonResponse: () => new Response(),
+        logprobs: undefined
       })
     })
 
@@ -285,7 +295,17 @@ describe('Document Regenerator', () => {
           finishReason: 'stop',
           usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
           warnings: [],
-          request: { model: 'mocked-openai-model', prompt: '', schema: {} }
+          request: {},
+          response: {
+            id: 'mock-response-id',
+            timestamp: new Date(),
+            modelId: 'mock-model-id',
+            headers: {}
+          },
+          providerMetadata: {},
+          experimental_providerMetadata: {},
+          toJsonResponse: () => new Response(),
+          logprobs: undefined
         })
         const result = await regenerateDocument(contexts[i])
         expect(result.document.metadata.regenerationReason).toBe(expectedReasons[i])

@@ -86,6 +86,8 @@ describe('/api/generate-suggestions', () => {
       text: 'Generated suggestion',
       toolCalls: [
         {
+          type: 'tool-call',
+          toolCallId: 'call-1',
           toolName: 'qaSuggestionTool',
           args: {
             suggestionType: 'edge_case',
@@ -99,7 +101,28 @@ describe('/api/generate-suggestions', () => {
             tags: ['edge-case', 'Authentication']
           }
         }
-      ]
+      ],
+      reasoning: '',
+      files: [],
+      reasoningDetails: [],
+      sources: [],
+      finishReason: 'stop',
+      usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
+      experimental_output: {},
+      toolResults: [],
+      warnings: [],
+      steps: [],
+      request: {},
+      response: {
+        id: 'mock-response-id',
+        timestamp: new Date(),
+        modelId: 'mock-model-id',
+        messages: [],
+        headers: {}
+      },
+      logprobs: undefined,
+      providerMetadata: {},
+      experimental_providerMetadata: {}
     })
   })
 
@@ -228,6 +251,8 @@ describe('/api/generate-suggestions', () => {
         .mockResolvedValueOnce({
           text: 'Success 1',
           toolCalls: [{
+            type: 'tool-call',
+            toolCallId: 'call-1',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'edge_case',
@@ -236,12 +261,35 @@ describe('/api/generate-suggestions', () => {
               priority: 'medium',
               reasoning: 'Important for coverage'
             }
-          }]
+          }],
+          reasoning: '',
+          files: [],
+          reasoningDetails: [],
+          sources: [],
+          finishReason: 'stop',
+          usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
+          experimental_output: {},
+          toolResults: [],
+          warnings: [],
+          steps: [],
+          request: {},
+          response: {
+            id: 'mock-response-id',
+            timestamp: new Date(),
+            modelId: 'mock-model-id',
+            messages: [],
+            headers: {}
+          },
+          logprobs: undefined,
+          providerMetadata: {},
+          experimental_providerMetadata: {}
         })
         .mockRejectedValueOnce(new Error('Failed'))
         .mockResolvedValueOnce({
           text: 'Success 2',
           toolCalls: [{
+            type: 'tool-call',
+            toolCallId: 'call-2',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'ui_verification',
@@ -250,7 +298,28 @@ describe('/api/generate-suggestions', () => {
               priority: 'low',
               reasoning: 'Good to have'
             }
-          }]
+          }],
+          reasoning: '',
+          files: [],
+          reasoningDetails: [],
+          sources: [],
+          finishReason: 'stop',
+          usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
+          experimental_output: {},
+          toolResults: [],
+          warnings: [],
+          steps: [],
+          request: {},
+          response: {
+            id: 'mock-response-id',
+            timestamp: new Date(),
+            modelId: 'mock-model-id',
+            messages: [],
+            headers: {}
+          },
+          logprobs: undefined,
+          providerMetadata: {},
+          experimental_providerMetadata: {}
         })
 
       const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
@@ -270,7 +339,28 @@ describe('/api/generate-suggestions', () => {
     it('should return error when no suggestions are generated', async () => {
       mockGenerateText.mockResolvedValue({
         text: 'No tool calls',
-        toolCalls: [] // Empty tool calls
+        toolCalls: [], // Empty tool calls
+        reasoning: '',
+        files: [],
+        reasoningDetails: [],
+        sources: [],
+        finishReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
+        experimental_output: {},
+        toolResults: [],
+        warnings: [],
+        steps: [],
+        request: {},
+        response: {
+          id: 'mock-response-id',
+          timestamp: new Date(),
+          modelId: 'mock-model-id',
+          messages: [],
+          headers: {}
+        },
+        logprobs: undefined,
+        providerMetadata: {},
+        experimental_providerMetadata: {}
       })
 
       // For this test, we need to create a special payload that would result in no suggestions
@@ -301,7 +391,7 @@ describe('/api/generate-suggestions', () => {
       // With our intelligent algorithms, we still get suggestions even with empty document
       // So we'll check that we get a successful response instead
       expect(response.status).toBe(200)
-      
+
       const responseData = await response.json()
       expect(responseData.suggestions.length).toBeGreaterThan(0)
     })

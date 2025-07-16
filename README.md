@@ -53,6 +53,16 @@ This script sends a request to the `/api/generate-suggestions` endpoint with a s
 
 ## Recent Updates
 
+### Test Infrastructure Improvements (July 2025)
+
+Enhanced test reliability and compatibility:
+- **Generate Suggestions Tests**: Fixed mock response structure to match AI SDK v5 requirements
+  - Updated `response` object structure with proper `id`, `timestamp`, `modelId`, `messages`, and `headers` fields
+  - Changed `logprobs` from `null` to `undefined` for better type compatibility
+  - All 14 test cases now pass successfully
+- **Test Configuration**: Using Vitest as primary test runner with Node.js environment
+- **TypeScript Compatibility**: Ensured all test mocks match the latest AI SDK type definitions
+
 ### Test Fixes for Document Regenerator (July 2025)
 
 Fixed issues with the document regenerator tests:
