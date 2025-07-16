@@ -6,6 +6,7 @@ import {
   generateCategoryTestSuggestions
 } from '@/lib/analysis/testCaseFormatter'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
+import { describe, it, expect } from 'vitest'
 
 describe('Test Case Formatter', () => {
   const mockTicket = {

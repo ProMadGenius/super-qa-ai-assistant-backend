@@ -1,17 +1,10 @@
 /**
- * Basic setup test to verify Jest configuration
+ * Basic setup test to verify Vitest configuration
  */
-describe('Project Setup', () => {
-  it('should have Jest configured correctly', () => {
-    expect(true).toBe(true)
-  })
+import { describe, it, expect } from 'vitest'
 
-  it('should be able to use TypeScript', () => {
-    const testObject: { name: string; value: number } = {
-      name: 'test',
-      value: 42
-    }
-    expect(testObject.name).toBe('test')
-    expect(testObject.value).toBe(42)
+describe('Project Setup', () => {
+  it('should have Vitest configured correctly', () => {
+    expect(true).toBe(true)
   })
 })

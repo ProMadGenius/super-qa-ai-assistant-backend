@@ -7,6 +7,7 @@ import {
   type QACategories,
   type TestCaseFormat
 } from '@/lib/schemas/QAProfile'
+import { describe, it, expect } from 'vitest'
 
 describe('QAProfile Schema Validation', () => {
   describe('qaCategoriesSchema', () => {

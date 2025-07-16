@@ -8,6 +8,7 @@ import {
   type JiraAttachment,
   type CommentImage
 } from '@/lib/schemas/JiraTicket'
+import { describe, it, expect } from 'vitest'
 
 describe('JiraTicket Schema Validation', () => {
   const validCommentImage: CommentImage = {

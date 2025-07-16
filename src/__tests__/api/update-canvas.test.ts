@@ -1,26 +1,41 @@
 import { POST } from '@/app/api/update-canvas/route'
 import { NextRequest } from 'next/server'
+import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 // Mock the AI SDK to avoid making real API calls during testing
-jest.mock('ai', () => ({
-  streamText: jest.fn()
+vi.mock('ai', () => ({
+  streamText: vi.fn()
 }))
 
-jest.mock('@ai-sdk/openai', () => ({
-  openai: jest.fn(() => 'mocked-openai-model')
+vi.mock('@ai-sdk/openai', () => ({
+  openai: vi.fn(() => 'mocked-openai-model')
 }))
 
 describe('/api/update-canvas', () => {
-  const mockStreamText = require('ai').streamText as jest.MockedFunction<any>
+  let mockStreamText: any
 
-  beforeEach(() => {
-    jest.clearAllMocks()
+  beforeEach(async () => {
+    vi.clearAllMocks()
     
-    // Mock successful streaming response
+    // Get the mocked streamText function
+    mockStreamText = vi.mocked((await import('ai')).streamText)
+
+    // Mock successful streaming response with all required properties
     mockStreamText.mockResolvedValue({
-      toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+      toDataStreamResponse: vi.fn(() => new Response('mocked stream', {
         headers: { 'Content-Type': 'text/plain' }
-      }))
+      })),
+      warnings: [],
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      sources: [],
+      files: [],
+      text: '',
+      toolCalls: [],
+      toolResults: [],
+      finishReason: 'stop',
+      rawResponse: {},
+      response: {},
+      experimental_providerMetadata: undefined
     })
   })
 
@@ -87,12 +102,23 @@ describe('/api/update-canvas', () => {
 
     it('should handle request without current document', async () => {
       // Mock successful streaming response with system prompt capture
-      mockStreamText.mockImplementation((options) => {
-        return {
-          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+      mockStreamText.mockImplementation((_options: any) => {
+        return Promise.resolve({
+          toDataStreamResponse: vi.fn(() => new Response('mocked stream', {
             headers: { 'Content-Type': 'text/plain' }
-          }))
-        }
+          })),
+          warnings: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          sources: [],
+          files: [],
+          text: '',
+          toolCalls: [],
+          toolResults: [],
+          finishReason: 'stop',
+          rawResponse: {},
+          response: {},
+          experimental_providerMetadata: undefined
+        })
       })
 
       const payloadWithoutDocument = {
@@ -114,7 +140,7 @@ describe('/api/update-canvas', () => {
 
       expect(response).toBeDefined()
       expect(mockStreamText).toHaveBeenCalled()
-      
+
       // Verify system prompt doesn't include document context
       const systemPrompt = mockStreamText.mock.calls[0][0].system
       expect(systemPrompt).not.toContain('Current Document Context')
@@ -122,12 +148,23 @@ describe('/api/update-canvas', () => {
 
     it('should include document context in system prompt when provided', async () => {
       // Mock successful streaming response with system prompt capture
-      mockStreamText.mockImplementation((options) => {
-        return {
-          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+      mockStreamText.mockImplementation((_options: any) => {
+        return Promise.resolve({
+          toDataStreamResponse: vi.fn(() => new Response('mocked stream', {
             headers: { 'Content-Type': 'text/plain' }
-          }))
-        }
+          })),
+          warnings: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          sources: [],
+          files: [],
+          text: '',
+          toolCalls: [],
+          toolResults: [],
+          finishReason: 'stop',
+          rawResponse: {},
+          response: {},
+          experimental_providerMetadata: undefined
+        })
       })
 
       const request = new NextRequest('http://localhost:3000/api/update-canvas', {
@@ -140,7 +177,7 @@ describe('/api/update-canvas', () => {
       // Verify the call was made with the right parameters
       expect(mockStreamText).toHaveBeenCalled()
       expect(mockStreamText.mock.calls[0][0]).toHaveProperty('system')
-      
+
       const systemPrompt = mockStreamText.mock.calls[0][0].system
       expect(systemPrompt).toContain('Current Document Context')
       expect(systemPrompt).toContain('TEST-123')
@@ -160,7 +197,7 @@ describe('/api/update-canvas', () => {
       const response = await POST(request)
 
       expect(response.status).toBe(400)
-      
+
       const responseData = await response.json()
       expect(responseData.error).toBe('VALIDATION_ERROR')
       expect(responseData.message).toContain('Invalid request payload')
@@ -185,7 +222,7 @@ describe('/api/update-canvas', () => {
       const response = await POST(request)
 
       expect(response.status).toBe(400)
-      
+
       const responseData = await response.json()
       expect(responseData.error).toBe('VALIDATION_ERROR')
     })
@@ -222,7 +259,7 @@ describe('/api/update-canvas', () => {
       const response = await POST(request)
 
       expect(response.status).toBe(500)
-      
+
       const responseData = await response.json()
       expect(responseData.error).toBe('INTERNAL_SERVER_ERROR')
     })
@@ -240,12 +277,23 @@ describe('/api/update-canvas', () => {
 
     it('should use correct AI model and parameters', async () => {
       // Mock successful streaming response
-      mockStreamText.mockImplementation((options) => {
-        return {
-          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+      mockStreamText.mockImplementation((_options: any) => {
+        return Promise.resolve({
+          toDataStreamResponse: vi.fn(() => new Response('mocked stream', {
             headers: { 'Content-Type': 'text/plain' }
-          }))
-        }
+          })),
+          warnings: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          sources: [],
+          files: [],
+          text: '',
+          toolCalls: [],
+          toolResults: [],
+          finishReason: 'stop',
+          rawResponse: {},
+          response: {},
+          experimental_providerMetadata: undefined
+        })
       })
 
       const request = new NextRequest('http://localhost:3000/api/update-canvas', {
@@ -266,12 +314,23 @@ describe('/api/update-canvas', () => {
 
     it('should build appropriate system prompt for QA refinement', async () => {
       // Mock successful streaming response with system prompt capture
-      mockStreamText.mockImplementation((options) => {
-        return {
-          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+      mockStreamText.mockImplementation((_options: any) => {
+        return Promise.resolve({
+          toDataStreamResponse: vi.fn(() => new Response('mocked stream', {
             headers: { 'Content-Type': 'text/plain' }
-          }))
-        }
+          })),
+          warnings: [],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          sources: [],
+          files: [],
+          text: '',
+          toolCalls: [],
+          toolResults: [],
+          finishReason: 'stop',
+          rawResponse: {},
+          response: {},
+          experimental_providerMetadata: undefined
+        })
       })
 
       const request = new NextRequest('http://localhost:3000/api/update-canvas', {
@@ -284,7 +343,7 @@ describe('/api/update-canvas', () => {
       // Verify the call was made with the right parameters
       expect(mockStreamText).toHaveBeenCalled()
       expect(mockStreamText.mock.calls[0][0]).toHaveProperty('system')
-      
+
       const systemPrompt = mockStreamText.mock.calls[0][0].system
       expect(systemPrompt).toContain('QA analyst assistant')
       expect(systemPrompt).toContain('refine and improve QA documentation')

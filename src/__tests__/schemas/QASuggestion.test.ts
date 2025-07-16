@@ -11,6 +11,7 @@ import {
   type QASuggestionsResponse,
   type GenerateSuggestionsRequest
 } from '@/lib/schemas/QASuggestion'
+import { describe, it, expect } from 'vitest'
 
 describe('QASuggestion Schema Validation', () => {
   const validQASuggestion: QASuggestion = {

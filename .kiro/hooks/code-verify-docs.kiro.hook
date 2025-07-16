@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "name": "Code Verification & Documentation Update",
-  "description": "Automatically checks for code errors and updates documentation when source files are modified",
+  "description": "Automatically checks for code errors, run npm test and updates README.md when source files are modified",
   "version": "1",
   "when": {
     "type": "fileEdited",

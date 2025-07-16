@@ -1,6 +1,7 @@
 import { validateTicketAnalysisPayload } from '@/lib/schemas/TicketAnalysisPayload'
 import { qaProfileSchema } from '@/lib/schemas/QAProfile'
 import { jiraTicketSchema } from '@/lib/schemas/JiraTicket'
+import { describe, it, expect } from 'vitest'
 
 describe('Real Data Validation', () => {
   // Real example data from EN-8775-full.json (complete structure)

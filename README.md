@@ -53,6 +53,13 @@ This script sends a request to the `/api/generate-suggestions` endpoint with a s
 
 ## Recent Updates
 
+### Test Fixes for Document Regenerator (July 2025)
+
+Fixed issues with the document regenerator tests:
+- Updated mocking approach for the AI SDK in `documentRegenerator.test.ts`
+- Properly mocked the `generateObject` function from the AI SDK
+- Ensured all tests pass for the document regenerator module
+
 ### AI SDK v5 Integration (July 2025)
 
 The backend has been updated to be compatible with Vercel AI SDK v5. Key changes include:
@@ -126,9 +133,10 @@ API_BASE_URL=http://localhost:3000  # Development
 
 ### Testing & Quality
 
-- **Jest 29**: Testing framework with Next.js integration
+- **Vitest**: Fast and modern testing framework (primary test runner)
+- **Jest**: Testing framework with Next.js integration (legacy support)
 - **Supertest**: API endpoint testing
-- **ESLint**: Code linting with Next.js configuration
+- **ESLint**: Code linting with Next.js configuration and TypeScript support
 - **Manual Test Scripts**: Node.js scripts for endpoint testing
 
 ---

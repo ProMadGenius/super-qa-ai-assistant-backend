@@ -1,4 +1,5 @@
 import { validateTicketAnalysisPayload } from '@/lib/schemas/TicketAnalysisPayload'
+import { describe, it, expect } from 'vitest'
 
 describe('Complete Real Data Integration Test', () => {
   // Complete real example from EN-8775-full.json

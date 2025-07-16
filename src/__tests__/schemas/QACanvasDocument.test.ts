@@ -20,6 +20,7 @@ import {
   type TableTestCase
 } from '@/lib/schemas/QACanvasDocument'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
+import { describe, it, expect } from 'vitest'
 
 describe('QACanvasDocument Schema Validation', () => {
   const validTicketSummary: TicketSummary = {

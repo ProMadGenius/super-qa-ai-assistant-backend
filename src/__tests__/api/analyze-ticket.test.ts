@@ -3,18 +3,22 @@ import { POST } from '@/app/api/analyze-ticket/route'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
 import { validateQACanvasDocument } from '@/lib/schemas/QACanvasDocument'
 import type { TicketAnalysisPayload } from '@/lib/schemas/TicketAnalysisPayload'
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+import * as ai from 'ai'
 
 // Mock the AI SDK to avoid making real API calls during testing
-jest.mock('ai', () => ({
-    generateObject: jest.fn()
+vi.mock('ai', () => ({
+    generateObject: vi.fn()
 }))
 
-jest.mock('@ai-sdk/openai', () => ({
-    openai: jest.fn(() => 'mocked-openai-model')
+vi.mock('@ai-sdk/openai', () => ({
+    openai: vi.fn(() => 'mocked-openai-model')
 }))
+
+// Get the mocked generateObject function
+const mockGenerateObject = vi.mocked(ai.generateObject)
 
 describe('/api/analyze-ticket', () => {
-    const mockGenerateObject = require('ai').generateObject as jest.MockedFunction<any>
 
     const validTicketPayload: TicketAnalysisPayload = {
         qaProfile: defaultQAProfile,
@@ -94,7 +98,7 @@ describe('/api/analyze-ticket', () => {
     }
 
     beforeEach(() => {
-        jest.clearAllMocks()
+        vi.clearAllMocks()
     })
 
     describe('Successful Analysis', () => {

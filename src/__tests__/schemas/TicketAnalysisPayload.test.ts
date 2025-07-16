@@ -8,6 +8,7 @@ import {
 } from '@/lib/schemas/TicketAnalysisPayload'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
 import type { JiraTicket } from '@/lib/schemas/JiraTicket'
+import { describe, it, expect } from 'vitest'
 
 describe('TicketAnalysisPayload Schema Validation', () => {
   const validJiraTicket: JiraTicket = {

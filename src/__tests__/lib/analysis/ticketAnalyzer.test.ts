@@ -5,6 +5,7 @@ import {
   estimateTestComplexity
 } from '@/lib/analysis/ticketAnalyzer'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
+import { describe, it, expect } from 'vitest'
 
 describe('Ticket Analyzer', () => {
   const mockBugTicket = {

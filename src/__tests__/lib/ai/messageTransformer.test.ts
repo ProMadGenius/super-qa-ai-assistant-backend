@@ -10,6 +10,7 @@ import {
 } from '@/lib/ai/messageTransformer'
 import { QACanvasDocument } from '@/lib/schemas/QACanvasDocument'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
+import { describe, it, expect } from 'vitest'
 
 // No need to mock the AI SDK for convertToCoreMessages anymore
 // as we've removed the dependency on it

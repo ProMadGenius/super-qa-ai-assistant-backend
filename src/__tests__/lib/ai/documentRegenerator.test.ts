@@ -7,19 +7,23 @@ import {
 import { QACanvasDocument } from '@/lib/schemas/QACanvasDocument'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
 import { UIMessage } from '@/lib/ai/messageTransformer'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 // Mock the AI SDK
-jest.mock('ai', () => ({
-  generateObject: jest.fn()
+vi.mock('ai', () => {
+  return {
+    generateObject: vi.fn()
+  }
+})
+
+vi.mock('@ai-sdk/openai', () => ({
+  openai: vi.fn(() => 'mocked-openai-model')
 }))
 
-jest.mock('@ai-sdk/openai', () => ({
-  openai: jest.fn(() => 'mocked-openai-model')
-}))
+// Import the mocked modules
+import * as ai from 'ai'
 
 describe('Document Regenerator', () => {
-  const mockGenerateObject = require('ai').generateObject as jest.MockedFunction<any>
-
   const mockTicket = {
     issueKey: 'TEST-123',
     summary: 'Fix login button not working',
@@ -156,13 +160,6 @@ describe('Document Regenerator', () => {
     }
   }
 
-  beforeEach(() => {
-    jest.clearAllMocks()
-    mockGenerateObject.mockResolvedValue({
-      object: mockRegeneratedDocument
-    })
-  })
-
   describe('regenerateDocument', () => {
     const mockContext: RegenerationContext = {
       originalDocument: mockOriginalDocument,
@@ -171,6 +168,18 @@ describe('Document Regenerator', () => {
       ticketData: mockTicket,
       qaProfile: defaultQAProfile
     }
+
+    beforeEach(() => {
+      vi.clearAllMocks()
+      // Set up the mock implementation
+      vi.mocked(ai.generateObject).mockResolvedValue({
+        object: mockRegeneratedDocument,
+        finishReason: 'stop',
+        usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
+        warnings: [],
+        request: { model: 'mocked-openai-model', prompt: '', schema: {} }
+      })
+    })
 
     it('should regenerate document successfully', async () => {
       const result = await regenerateDocument(mockContext)
@@ -197,7 +206,7 @@ describe('Document Regenerator', () => {
 
       await regenerateDocument(mockContext, options)
 
-      expect(mockGenerateObject).toHaveBeenCalledWith(
+      expect(ai.generateObject).toHaveBeenCalledWith(
         expect.objectContaining({
           temperature: 0.5,
           model: 'mocked-openai-model'
@@ -208,7 +217,7 @@ describe('Document Regenerator', () => {
     it('should build comprehensive regeneration prompt', async () => {
       await regenerateDocument(mockContext)
 
-      const promptCall = mockGenerateObject.mock.calls[0][0]
+      const promptCall = vi.mocked(ai.generateObject).mock.calls[0][0]
       expect(promptCall.prompt).toContain('TEST-123')
       expect(promptCall.prompt).toContain('Fix login button not working')
       expect(promptCall.prompt).toContain('Please add more test cases for error handling')
@@ -217,7 +226,7 @@ describe('Document Regenerator', () => {
     })
 
     it('should handle regeneration errors', async () => {
-      mockGenerateObject.mockRejectedValue(new Error('AI generation failed'))
+      vi.mocked(ai.generateObject).mockRejectedValue(new Error('AI generation failed'))
 
       await expect(regenerateDocument(mockContext)).rejects.toThrow('Document regeneration failed')
     })
@@ -271,6 +280,13 @@ describe('Document Regenerator', () => {
       ]
 
       for (let i = 0; i < contexts.length; i++) {
+        vi.mocked(ai.generateObject).mockResolvedValue({
+          object: mockRegeneratedDocument,
+          finishReason: 'stop',
+          usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
+          warnings: [],
+          request: { model: 'mocked-openai-model', prompt: '', schema: {} }
+        })
         const result = await regenerateDocument(contexts[i])
         expect(result.document.metadata.regenerationReason).toBe(expectedReasons[i])
       }
