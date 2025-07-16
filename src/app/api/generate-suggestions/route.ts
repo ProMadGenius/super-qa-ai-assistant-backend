@@ -4,6 +4,10 @@ import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import { handleAIError, handleValidationError } from '../../../lib/ai/errorHandler'
 import { 
+  documentAssumptions
+} from '../../../lib/ai/uncertaintyHandler'
+import { v4 as uuidv4 } from 'uuid'
+import { 
   qaSuggestionTool,
   createQASuggestion,
   QASuggestion,
@@ -54,13 +58,16 @@ type GenerateSuggestionsPayload = z.infer<typeof generateSuggestionsPayloadSchem
  * Generates contextual QA suggestions based on current document content
  */
 export async function POST(request: NextRequest) {
+  // Generate a unique request ID for tracking and debugging
+  const requestId = uuidv4()
+  
   try {
     // Parse and validate the request body
     const body = await request.json()
     const validationResult = generateSuggestionsPayloadSchema.safeParse(body)
     
     if (!validationResult.success) {
-      return handleValidationError(validationResult.error.issues)
+      return handleValidationError(validationResult.error.issues, requestId)
     }
 
     const { 
@@ -79,6 +86,19 @@ export async function POST(request: NextRequest) {
       excludeTypes
     )
 
+    // Check for potential ambiguities in the request
+    const requestContext = {
+      currentDocument: currentDocument as QACanvasDocument,
+      userPreferences: {
+        focusAreas,
+        excludeTypes,
+        maxSuggestions
+      }
+    }
+
+    // Document any assumptions we need to make
+    const assumptions = documentAssumptions({ content: JSON.stringify(requestContext) }, requestContext)
+    
     // Generate suggestions using intelligent algorithms
     const suggestions: QASuggestion[] = []
     const typedDocument = currentDocument as QACanvasDocument
@@ -184,7 +204,7 @@ export async function POST(request: NextRequest) {
         
         // In a real environment, we would use these suggestions
         // But for now, we'll just log them and use our algorithm-generated ones
-        console.log(`Generated AI suggestion ${i + 1}`)
+        console.log(`Generated AI suggestion ${i + 1}`, toolCalls)
       } catch (error) {
         console.warn(`Failed to generate AI suggestion ${i + 1}:`, error)
       }
@@ -266,7 +286,15 @@ export async function POST(request: NextRequest) {
         {
           error: 'AI_GENERATION_ERROR',
           message: 'Failed to generate any suggestions',
-          details: 'The AI was unable to generate suggestions for the provided document'
+          details: 'The AI was unable to generate suggestions for the provided document',
+          requestId,
+          errorCode: 'NO_SUGGESTIONS',
+          retryable: true,
+          suggestions: [
+            'Try modifying your focus areas or removing exclusions',
+            'Ensure the document contains sufficient content for analysis',
+            'Try again with different parameters'
+          ]
         },
         { status: 500 }
       )
@@ -283,7 +311,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response, { status: 200 })
 
   } catch (error) {
-    return handleAIError(error)
+    return handleAIError(error, requestId)
   }
 }
 

@@ -12,6 +12,12 @@ import {
   UIMessage,
   SystemPromptContext
 } from '../../../lib/ai/messageTransformer'
+import {
+  documentAssumptions,
+  generateClarifyingQuestions,
+  UncertaintyType
+} from '../../../lib/ai/uncertaintyHandler'
+import { v4 as uuidv4 } from 'uuid'
 
 /**
  * Schema for update canvas request payload
@@ -47,13 +53,16 @@ type UpdateCanvasPayload = z.infer<typeof updateCanvasPayloadSchema>
  * Handles conversational refinement of QA documentation through streaming responses
  */
 export async function POST(request: NextRequest) {
+  // Generate a unique request ID for tracking and debugging
+  const requestId = uuidv4()
+  
   try {
     // Parse and validate the request body
     const body = await request.json()
     const validationResult = updateCanvasPayloadSchema.safeParse(body)
     
     if (!validationResult.success) {
-      return handleValidationError(validationResult.error.issues)
+      return handleValidationError(validationResult.error.issues, requestId)
     }
 
     const { messages, currentDocument }: UpdateCanvasPayload = validationResult.data
@@ -65,7 +74,7 @@ export async function POST(request: NextRequest) {
         path: ['messages'],
         message: error,
         code: 'invalid_format'
-      })))
+      })), requestId)
     }
 
     // Sanitize messages for AI processing
@@ -98,10 +107,50 @@ export async function POST(request: NextRequest) {
       createdAt: typeof msg.createdAt === 'string' ? new Date(msg.createdAt) : msg.createdAt
     }))
 
+    // Check for ambiguities in the latest user message
+    const latestUserMessage = sanitizedMessages.filter(msg => msg.role === 'user').pop()
+    
+    // Document any assumptions we need to make
+    let assumptions = []
+    if (latestUserMessage) {
+      assumptions = documentAssumptions(latestUserMessage, context)
+    }
+    
+    // Enhance system prompt with uncertainty handling instructions if needed
+    let enhancedSystemPrompt = systemPrompt
+    if (assumptions.length > 0) {
+      enhancedSystemPrompt = `${systemPrompt}
+
+## Uncertainty Handling Instructions:
+
+I've detected some ambiguity in the user's request. Please follow these guidelines:
+
+1. If the request is unclear, use the "try, verify, and ask for feedback" approach:
+   - Make your best attempt to address what you think the user is asking
+   - Clearly state any assumptions you're making
+   - Ask specific questions to clarify ambiguous points
+
+2. When making assumptions:
+   - Explicitly state what you're assuming and why
+   - Offer alternatives if appropriate
+   - Ask for confirmation or correction
+
+3. For ambiguous requests:
+   - Provide a response that addresses the most likely interpretation
+   - Acknowledge other possible interpretations
+   - Ask clarifying questions to narrow down the user's intent
+
+4. Always maintain a conversational, helpful tone while being transparent about uncertainty.
+
+Specific assumptions detected in this request:
+${assumptions.map(a => `- ${a.description}`).join('\n')}
+`
+    }
+
     // Stream the AI response for real-time updates
     const result = await streamText({
       model: openai('gpt-4o'),
-      system: systemPrompt,
+      system: enhancedSystemPrompt,
       messages: modelMessages, // Use the transformed messages directly
       temperature: 0.3,
       maxTokens: 4000,
@@ -111,7 +160,7 @@ export async function POST(request: NextRequest) {
     return result.toDataStreamResponse()
 
   } catch (error) {
-    return handleAIError(error)
+    return handleAIError(error, requestId)
   }
 }
 

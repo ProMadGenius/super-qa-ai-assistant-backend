@@ -206,8 +206,9 @@ describe('/api/analyze-ticket', () => {
             expect(responseData.error).toBe('VALIDATION_ERROR')
             expect(responseData.message).toBe('Invalid request payload')
             expect(responseData.details).toBeDefined()
-            expect(Array.isArray(responseData.details)).toBe(true)
-            expect(responseData.details.length).toBeGreaterThan(0)
+            expect(responseData.details.issues).toBeDefined()
+            expect(Array.isArray(responseData.details.issues)).toBe(true)
+            expect(responseData.details.issues.length).toBeGreaterThan(0)
         })
 
         it('should return detailed validation errors', async () => {
@@ -236,11 +237,18 @@ describe('/api/analyze-ticket', () => {
 
             expect(response.status).toBe(400)
             expect(responseData.details).toBeDefined()
+            expect(responseData.details.issues).toBeDefined()
 
             // Should have specific field-level errors
-            const fieldErrors = responseData.details.map((detail: any) => detail.field)
+            const fieldErrors = responseData.details.issues.map((detail: any) => detail.field)
             expect(fieldErrors.some((field: string) => field.includes('qaProfile'))).toBe(true)
             expect(fieldErrors.some((field: string) => field.includes('ticketJson'))).toBe(true)
+            
+            // Should have grouped errors by field
+            expect(responseData.details.groupedByField).toBeDefined()
+            
+            // Should have suggestions
+            expect(Array.isArray(responseData.suggestions)).toBe(true)
         })
 
         it('should handle malformed JSON', async () => {
@@ -258,7 +266,7 @@ describe('/api/analyze-ticket', () => {
     })
 
     describe('AI Generation Errors', () => {
-        it('should handle AI generation failures', async () => {
+        it('should handle AI generation failures with partial results', async () => {
             mockGenerateObject.mockRejectedValue(new Error('AI_NoObjectGeneratedError: Failed to generate'))
 
             const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
@@ -269,12 +277,15 @@ describe('/api/analyze-ticket', () => {
             const response = await POST(request)
             const responseData = await response.json()
 
-            expect(response.status).toBe(500)
-            expect(responseData.error).toBe('AI_GENERATION_ERROR')
-            expect(responseData.message).toBe('Failed to generate structured QA documentation')
+            // We now return partial results with 206 status
+            expect(response.status).toBe(206)
+            expect(responseData.configurationWarnings).toBeDefined()
+            expect(responseData.configurationWarnings.length).toBeGreaterThan(0)
+            expect(responseData.configurationWarnings[0].title).toContain('Document Generation Error')
+            expect(responseData.metadata.isPartialResult).toBe(true)
         })
 
-        it('should handle rate limit errors', async () => {
+        it('should handle rate limit errors with partial results', async () => {
             mockGenerateObject.mockRejectedValue(new Error('rate limit exceeded'))
 
             const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
@@ -285,12 +296,15 @@ describe('/api/analyze-ticket', () => {
             const response = await POST(request)
             const responseData = await response.json()
 
-            expect(response.status).toBe(429)
-            expect(responseData.error).toBe('RATE_LIMIT_ERROR')
-            expect(responseData.message).toBe('AI service rate limit exceeded')
+            // We now return partial results with 206 status
+            expect(response.status).toBe(206)
+            expect(responseData.configurationWarnings).toBeDefined()
+            expect(responseData.configurationWarnings.length).toBeGreaterThan(0)
+            expect(responseData.metadata.isPartialResult).toBe(true)
+            expect(response.headers.get('X-Error-Details')).toBeDefined()
         })
 
-        it('should handle quota exceeded errors', async () => {
+        it('should handle quota exceeded errors with partial results', async () => {
             mockGenerateObject.mockRejectedValue(new Error('quota exceeded'))
 
             const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
@@ -301,11 +315,13 @@ describe('/api/analyze-ticket', () => {
             const response = await POST(request)
             const responseData = await response.json()
 
-            expect(response.status).toBe(429)
-            expect(responseData.error).toBe('RATE_LIMIT_ERROR')
+            // We now return partial results with 206 status
+            expect(response.status).toBe(206)
+            expect(responseData.configurationWarnings).toBeDefined()
+            expect(responseData.metadata.isPartialResult).toBe(true)
         })
 
-        it('should handle generic AI errors', async () => {
+        it('should handle generic AI errors with partial results', async () => {
             mockGenerateObject.mockRejectedValue(new Error('Unexpected AI error'))
 
             const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
@@ -316,9 +332,11 @@ describe('/api/analyze-ticket', () => {
             const response = await POST(request)
             const responseData = await response.json()
 
-            expect(response.status).toBe(500)
-            expect(responseData.error).toBe('INTERNAL_SERVER_ERROR')
-            expect(responseData.message).toBe('An unexpected error occurred while analyzing the ticket')
+            // We now return partial results with 206 status
+            expect(response.status).toBe(206)
+            expect(responseData.configurationWarnings).toBeDefined()
+            expect(responseData.configurationWarnings.length).toBeGreaterThan(0)
+            expect(responseData.metadata.partialResultInfo).toBeDefined()
         })
     })
 

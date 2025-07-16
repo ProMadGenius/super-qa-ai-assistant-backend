@@ -9,6 +9,12 @@ import {
   qaCanvasDocumentSchema,
   type QACanvasDocument 
 } from '@/lib/schemas/QACanvasDocument'
+import { handleValidationError, handleAIError } from '@/lib/ai/errorHandler'
+import {
+  generatePartialResults,
+  UncertaintyType
+} from '@/lib/ai/uncertaintyHandler'
+import { v4 as uuidv4 } from 'uuid'
 
 /**
  * POST /api/analyze-ticket
@@ -17,27 +23,57 @@ import {
  * using AI-powered analysis with structured output.
  */
 export async function POST(request: NextRequest) {
+  // Generate a unique request ID for tracking and debugging
+  const requestId = uuidv4()
+  
   try {
     // Parse and validate the request body
     const body = await request.json()
     const validationResult = validateTicketAnalysisPayload(body)
     
     if (!validationResult.success) {
-      return NextResponse.json(
-        {
-          error: 'VALIDATION_ERROR',
-          message: 'Invalid request payload',
-          details: validationResult.error.issues.map(issue => ({
-            field: issue.path.join('.'),
-            message: issue.message,
-            code: issue.code
-          }))
-        },
-        { status: 400 }
-      )
+      return handleValidationError(validationResult.error.issues, requestId)
     }
 
     const { qaProfile, ticketJson }: TicketAnalysisPayload = validationResult.data
+    
+    // Document any assumptions we need to make based on the input data
+    const assumptions = []
+    
+    // Check for potential configuration issues
+    if (!qaProfile.testCaseFormat) {
+      assumptions.push({
+        type: UncertaintyType.MISSING_CONTEXT,
+        description: 'No test case format specified, defaulting to Gherkin format',
+        alternatives: ['Step-by-step', 'Table format'],
+        confidence: 0.7,
+        impact: 'medium'
+      })
+    }
+    
+    // Check for minimal ticket information
+    if (!ticketJson.description || ticketJson.description.trim().length < 50) {
+      assumptions.push({
+        type: UncertaintyType.MISSING_CONTEXT,
+        description: 'Limited ticket description provided, may affect quality of generated test cases',
+        confidence: 0.9,
+        impact: 'high'
+      })
+    }
+    
+    // Check for potential conflicts in QA categories
+    const activeCategories = Object.entries(qaProfile.qaCategories)
+      .filter(([_, active]) => active)
+      .map(([category]) => category)
+    
+    if (activeCategories.includes('api') && !ticketJson.description.toLowerCase().includes('api')) {
+      assumptions.push({
+        type: UncertaintyType.CONFLICTING_REQUIREMENTS,
+        description: 'API testing category is enabled but ticket may not involve API functionality',
+        confidence: 0.6,
+        impact: 'medium'
+      })
+    }
 
     // Build comprehensive system prompt for QA analysis
     const systemPrompt = `You are a world-class QA analyst tasked with creating comprehensive test documentation. 
@@ -101,74 +137,152 @@ ${ticketJson.comments.map((comment, index) =>
 
 Generate a complete QACanvasDocument with all sections properly filled out.`
 
+    // Enhance system prompt with uncertainty handling if needed
+    let enhancedSystemPrompt = systemPrompt
+    if (assumptions.length > 0) {
+      enhancedSystemPrompt = `${systemPrompt}
+
+## Uncertainty Handling Instructions:
+
+I've detected some ambiguity in the input data. Please follow these guidelines:
+
+1. When making assumptions:
+   - Document any assumptions in the configurationWarnings section
+   - Provide clear recommendations for how to address these issues
+   - Ensure the generated document is still useful despite ambiguities
+
+2. For conflicting requirements:
+   - Prioritize the most likely interpretation based on the ticket content
+   - Document alternative interpretations in the configurationWarnings section
+   - Provide test cases that cover multiple interpretations when possible
+
+3. For missing information:
+   - Generate the best possible document with available information
+   - Clearly indicate where more information would improve the results
+   - Provide placeholder content that can be easily updated later
+
+Specific assumptions detected in this request:
+${assumptions.map(a => `- ${a.description}`).join('\n')}
+`
+    }
+
     // Generate structured QA documentation using AI
     const startTime = Date.now()
     
-    const { object: generatedDocument } = await generateObject({
-      model: openai('gpt-4o'),
-      schema: qaCanvasDocumentSchema,
-      system: systemPrompt,
-      prompt: analysisPrompt,
-      temperature: 0.3, // Lower temperature for more consistent, structured output
-    })
+    try {
+      const { object: generatedDocument } = await generateObject({
+        model: openai('gpt-4o'),
+        schema: qaCanvasDocumentSchema,
+        system: enhancedSystemPrompt,
+        prompt: analysisPrompt,
+        temperature: 0.3, // Lower temperature for more consistent, structured output
+      })
 
-    const generationTime = Date.now() - startTime
+      const generationTime = Date.now() - startTime
 
-    // Enhance the generated document with metadata
-    const enhancedDocument: QACanvasDocument = {
-      ...generatedDocument,
-      metadata: {
-        ...generatedDocument.metadata,
-        generatedAt: new Date().toISOString(),
-        qaProfile,
-        ticketId: ticketJson.issueKey,
-        documentVersion: '1.0',
-        aiModel: 'gpt-4o',
-        generationTime,
-        wordCount: estimateWordCount(generatedDocument)
+      // Enhance the generated document with metadata
+      const enhancedDocument: QACanvasDocument = {
+        ...generatedDocument,
+        metadata: {
+          ...generatedDocument.metadata,
+          generatedAt: new Date().toISOString(),
+          qaProfile,
+          ticketId: ticketJson.issueKey,
+          documentVersion: '1.0',
+          aiModel: 'gpt-4o',
+          generationTime,
+          wordCount: estimateWordCount(generatedDocument),
+          // Store assumptions in regenerationReason if there are any
+          regenerationReason: assumptions.length > 0 ? `Generated with ${assumptions.length} assumptions` : undefined
+        }
+      }
+
+      // Return the generated QA documentation
+      return NextResponse.json(enhancedDocument, { status: 200 })
+    } catch (generationError) {
+      console.error('Error generating complete document, attempting partial generation:', generationError)
+      
+      // Attempt to generate partial results
+      try {
+        // Create context for partial results generation
+        const context = {
+          currentDocument: {
+            ticketSummary: {
+              problem: ticketJson.summary || 'Unknown problem',
+              solution: 'Solution details unavailable due to processing error',
+              context: ticketJson.description?.substring(0, 200) || 'Context unavailable'
+            },
+            acceptanceCriteria: [],
+            testCases: [],
+            configurationWarnings: [
+              {
+                title: 'Document Generation Error',
+                message: `Failed to generate complete document: ${generationError instanceof Error ? generationError.message : String(generationError)}`,
+                recommendation: 'Try again with more detailed ticket information or different QA profile settings',
+                type: 'recommendation' as const,
+                severity: 'high' as const
+              }
+            ],
+            metadata: {
+              generatedAt: new Date().toISOString(),
+              qaProfile,
+              ticketId: ticketJson.issueKey,
+              documentVersion: '1.0',
+              aiModel: 'gpt-4o',
+              generationTime: Date.now() - startTime,
+              isPartialResult: true
+            }
+          }
+        }
+        
+        // Generate partial results
+        const partialResult = generatePartialResults(
+          { ticketJson, qaProfile }, 
+          context, 
+          generationError instanceof Error ? generationError : new Error(String(generationError))
+        )
+        
+        // Create a partial document with available information
+        const partialDocument: QACanvasDocument = {
+          ticketSummary: context.currentDocument.ticketSummary,
+          acceptanceCriteria: partialResult.fallbackContent?.acceptanceCriteria || [],
+          testCases: partialResult.fallbackContent?.testCases || [],
+          configurationWarnings: [
+            ...context.currentDocument.configurationWarnings,
+            {
+              title: 'Partial Results Generated',
+              message: partialResult.reason,
+              recommendation: 'Review the partial results and provide more information to generate complete documentation',
+              type: 'recommendation' as const,
+              severity: 'medium' as const
+            }
+          ],
+          metadata: {
+            ...context.currentDocument.metadata,
+            // Store partial result info in a custom field that won't conflict with schema
+            documentVersion: `1.0-partial-${partialResult.completedSections.length}-${partialResult.missingSections.length}`,
+            regenerationReason: partialResult.reason
+          }
+        }
+        
+        // Return partial results with appropriate status code
+        return NextResponse.json(partialDocument, { 
+          status: 206, // Partial Content
+          headers: {
+            'X-Partial-Result': 'true',
+            'X-Error-Details': encodeURIComponent(generationError.message)
+          }
+        })
+      } catch (fallbackError) {
+        // If even partial generation fails, throw the original error
+        console.error('Failed to generate partial results:', fallbackError)
+        throw generationError
       }
     }
-
-    // Return the generated QA documentation
-    return NextResponse.json(enhancedDocument, { status: 200 })
 
   } catch (error) {
     console.error('Error in /api/analyze-ticket:', error)
-
-    // Handle specific AI SDK errors
-    if (error instanceof Error) {
-      if (error.message.includes('AI_NoObjectGeneratedError')) {
-        return NextResponse.json(
-          {
-            error: 'AI_GENERATION_ERROR',
-            message: 'Failed to generate structured QA documentation',
-            details: 'The AI model was unable to generate a valid document structure'
-          },
-          { status: 500 }
-        )
-      }
-
-      if (error.message.includes('rate limit') || error.message.includes('quota')) {
-        return NextResponse.json(
-          {
-            error: 'RATE_LIMIT_ERROR',
-            message: 'AI service rate limit exceeded',
-            details: 'Please try again in a few moments'
-          },
-          { status: 429 }
-        )
-      }
-    }
-
-    // Generic server error
-    return NextResponse.json(
-      {
-        error: 'INTERNAL_SERVER_ERROR',
-        message: 'An unexpected error occurred while analyzing the ticket',
-        details: process.env.NODE_ENV === 'development' ? error?.toString() : undefined
-      },
-      { status: 500 }
-    )
+    return handleAIError(error, requestId)
   }
 }
 
