@@ -1,0 +1,20 @@
+{
+    "autoRefresh": true,
+    "includeComments": true,
+    "includeImages": true,
+    "operationMode": "offline",
+    "showNotifications": true,
+    "testCaseFormat": "gherkin",
+    "qaCategories": {
+      "functional": true,
+      "ux": true,
+      "ui": true,
+      "negative": true,
+      "api": false,
+      "database": false,
+      "performance": false,
+      "security": false,
+      "mobile": true,
+      "accessibility": true
+    }
+  }

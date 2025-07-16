@@ -1,0 +1,444 @@
+import { NextRequest } from 'next/server'
+import { POST } from '@/app/api/analyze-ticket/route'
+import { defaultQAProfile } from '@/lib/schemas/QAProfile'
+import { validateQACanvasDocument } from '@/lib/schemas/QACanvasDocument'
+import type { TicketAnalysisPayload } from '@/lib/schemas/TicketAnalysisPayload'
+
+// Mock the AI SDK to avoid making real API calls during testing
+jest.mock('ai', () => ({
+    generateObject: jest.fn()
+}))
+
+jest.mock('@ai-sdk/openai', () => ({
+    openai: jest.fn(() => 'mocked-openai-model')
+}))
+
+describe('/api/analyze-ticket', () => {
+    const mockGenerateObject = require('ai').generateObject as jest.MockedFunction<any>
+
+    const validTicketPayload: TicketAnalysisPayload = {
+        qaProfile: defaultQAProfile,
+        ticketJson: {
+            issueKey: 'TEST-123',
+            summary: 'Fix login button not working',
+            description: 'The login button on the homepage is not responding to clicks. Users cannot log in.',
+            status: 'In Progress',
+            priority: 'Priority: High',
+            issueType: 'Bug',
+            assignee: 'John Doe',
+            reporter: 'Jane Smith',
+            comments: [
+                {
+                    author: 'Product Manager',
+                    body: 'This is blocking users from accessing the application',
+                    date: 'January 15, 2024 at 10:30 AM',
+                    images: [],
+                    links: []
+                }
+            ],
+            attachments: [],
+            components: ['Frontend', 'Authentication'],
+            customFields: {
+                acceptance_criteria: 'Login button should respond to clicks and redirect to dashboard',
+                story_points: '3'
+            },
+            processingComplete: true,
+            scrapedAt: '2024-01-15T13:00:00Z'
+        }
+    }
+
+    const mockGeneratedDocument = {
+        ticketSummary: {
+            problem: 'Users cannot log in because the login button is unresponsive',
+            solution: 'Fix the login button to properly handle click events',
+            context: 'This affects user authentication and access to the application'
+        },
+        configurationWarnings: [],
+        acceptanceCriteria: [
+            {
+                id: 'ac-001',
+                title: 'Login button responds to clicks',
+                description: 'When user clicks the login button, it should initiate the login process',
+                priority: 'must' as const,
+                category: 'functional' as const,
+                testable: true
+            }
+        ],
+        testCases: [
+            {
+                format: 'steps' as const,
+                id: 'tc-001',
+                category: 'functional',
+                priority: 'high' as const,
+                testCase: {
+                    title: 'Verify login button functionality',
+                    objective: 'Ensure login button responds to user clicks',
+                    preconditions: ['User is on login page'],
+                    steps: [
+                        {
+                            stepNumber: 1,
+                            action: 'Click login button',
+                            expectedResult: 'Login process initiates'
+                        }
+                    ],
+                    postconditions: []
+                }
+            }
+        ],
+        metadata: {
+            generatedAt: '2024-01-15T13:00:00Z',
+            qaProfile: defaultQAProfile,
+            ticketId: 'TEST-123',
+            documentVersion: '1.0'
+        }
+    }
+
+    beforeEach(() => {
+        jest.clearAllMocks()
+    })
+
+    describe('Successful Analysis', () => {
+        it('should successfully analyze a valid ticket and return QA documentation', async () => {
+            // Mock successful AI generation
+            mockGenerateObject.mockResolvedValue({
+                object: mockGeneratedDocument
+            })
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(200)
+            expect(responseData).toBeDefined()
+
+            // Validate the response structure
+            const validationResult = validateQACanvasDocument(responseData)
+            expect(validationResult.success).toBe(true)
+
+            if (validationResult.success) {
+                expect(validationResult.data.ticketSummary.problem).toBeDefined()
+                expect(validationResult.data.acceptanceCriteria).toHaveLength(1)
+                expect(validationResult.data.testCases).toHaveLength(1)
+                expect(validationResult.data.metadata.ticketId).toBe('TEST-123')
+                expect(validationResult.data.metadata.aiModel).toBe('gpt-4o')
+                expect(validationResult.data.metadata.generationTime).toBeDefined()
+                expect(validationResult.data.metadata.wordCount).toBeGreaterThan(0)
+            }
+        })
+
+        it('should include enhanced metadata in the response', async () => {
+            mockGenerateObject.mockResolvedValue({
+                object: mockGeneratedDocument
+            })
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(200)
+            expect(responseData.metadata.generatedAt).toBeDefined()
+            expect(responseData.metadata.qaProfile).toEqual(defaultQAProfile)
+            expect(responseData.metadata.ticketId).toBe('TEST-123')
+            expect(responseData.metadata.documentVersion).toBe('1.0')
+            expect(responseData.metadata.aiModel).toBe('gpt-4o')
+            expect(typeof responseData.metadata.generationTime).toBe('number')
+            expect(typeof responseData.metadata.wordCount).toBe('number')
+        })
+
+        it('should call generateObject with correct parameters', async () => {
+            mockGenerateObject.mockResolvedValue({
+                object: mockGeneratedDocument
+            })
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            await POST(request)
+
+            expect(mockGenerateObject).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    model: 'mocked-openai-model', // openai('gpt-4o') returns this mock
+                    schema: expect.any(Object),   // qaCanvasDocumentSchema
+                    system: expect.stringContaining('world-class QA analyst'),
+                    prompt: expect.stringContaining('TEST-123'),
+                    temperature: 0.3
+                })
+            )
+        })
+    })
+
+    describe('Validation Errors', () => {
+        it('should return 400 for invalid request payload', async () => {
+            const invalidPayload = {
+                qaProfile: {
+                    // Missing required fields
+                    qaCategories: { functional: true }
+                },
+                ticketJson: {
+                    // Missing required fields
+                    issueKey: 'TEST-123'
+                }
+            }
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(invalidPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(400)
+            expect(responseData.error).toBe('VALIDATION_ERROR')
+            expect(responseData.message).toBe('Invalid request payload')
+            expect(responseData.details).toBeDefined()
+            expect(Array.isArray(responseData.details)).toBe(true)
+            expect(responseData.details.length).toBeGreaterThan(0)
+        })
+
+        it('should return detailed validation errors', async () => {
+            const invalidPayload = {
+                qaProfile: {
+                    qaCategories: {
+                        functional: 'not-boolean' // Invalid type
+                    },
+                    testCaseFormat: 'invalid-format' // Invalid enum value
+                },
+                ticketJson: {
+                    issueKey: 'TEST-123',
+                    summary: 'Test',
+                    description: 'Test description'
+                    // Missing other required fields
+                }
+            }
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(invalidPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(400)
+            expect(responseData.details).toBeDefined()
+
+            // Should have specific field-level errors
+            const fieldErrors = responseData.details.map((detail: any) => detail.field)
+            expect(fieldErrors.some((field: string) => field.includes('qaProfile'))).toBe(true)
+            expect(fieldErrors.some((field: string) => field.includes('ticketJson'))).toBe(true)
+        })
+
+        it('should handle malformed JSON', async () => {
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: 'invalid json'
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(500)
+            expect(responseData.error).toBe('INTERNAL_SERVER_ERROR')
+        })
+    })
+
+    describe('AI Generation Errors', () => {
+        it('should handle AI generation failures', async () => {
+            mockGenerateObject.mockRejectedValue(new Error('AI_NoObjectGeneratedError: Failed to generate'))
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(500)
+            expect(responseData.error).toBe('AI_GENERATION_ERROR')
+            expect(responseData.message).toBe('Failed to generate structured QA documentation')
+        })
+
+        it('should handle rate limit errors', async () => {
+            mockGenerateObject.mockRejectedValue(new Error('rate limit exceeded'))
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(429)
+            expect(responseData.error).toBe('RATE_LIMIT_ERROR')
+            expect(responseData.message).toBe('AI service rate limit exceeded')
+        })
+
+        it('should handle quota exceeded errors', async () => {
+            mockGenerateObject.mockRejectedValue(new Error('quota exceeded'))
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(429)
+            expect(responseData.error).toBe('RATE_LIMIT_ERROR')
+        })
+
+        it('should handle generic AI errors', async () => {
+            mockGenerateObject.mockRejectedValue(new Error('Unexpected AI error'))
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(500)
+            expect(responseData.error).toBe('INTERNAL_SERVER_ERROR')
+            expect(responseData.message).toBe('An unexpected error occurred while analyzing the ticket')
+        })
+    })
+
+    describe('Word Count Estimation', () => {
+        it('should calculate word count for generated document', async () => {
+            const documentWithMoreContent = {
+                ...mockGeneratedDocument,
+                ticketSummary: {
+                    problem: 'This is a longer problem description with multiple words to test counting',
+                    solution: 'This is a detailed solution with many words',
+                    context: 'Extended context with additional information'
+                },
+                acceptanceCriteria: [
+                    {
+                        id: 'ac-001',
+                        title: 'Detailed acceptance criterion title',
+                        description: 'This is a comprehensive description of the acceptance criterion with many words',
+                        priority: 'must' as const,
+                        category: 'functional' as const,
+                        testable: true
+                    }
+                ]
+            }
+
+            mockGenerateObject.mockResolvedValue({
+                object: documentWithMoreContent
+            })
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(validTicketPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(200)
+            expect(responseData.metadata.wordCount).toBeGreaterThan(20) // Should count multiple words
+        })
+    })
+
+    describe('Real Data Integration', () => {
+        it('should handle real Chrome extension data structure', async () => {
+            const realDataPayload: TicketAnalysisPayload = {
+                qaProfile: {
+                    autoRefresh: true,
+                    includeComments: true,
+                    includeImages: true,
+                    operationMode: 'offline',
+                    showNotifications: true,
+                    testCaseFormat: 'gherkin',
+                    qaCategories: {
+                        functional: true,
+                        ux: true,
+                        ui: true,
+                        negative: true,
+                        api: false,
+                        database: false,
+                        performance: false,
+                        security: false,
+                        mobile: true,
+                        accessibility: true
+                    }
+                },
+                ticketJson: {
+                    issueKey: 'EN-8775',
+                    summary: 'REWORK Unable to reverse these payments',
+                    description: 'in reference to case 661432. Using a payment made from LabCorp...',
+                    status: 'Done',
+                    priority: 'Priority: Normal',
+                    issueType: 'Bug',
+                    assignee: 'Fred Solovyev',
+                    reporter: 'Exalate',
+                    comments: [
+                        {
+                            author: 'Lisa Thomas',
+                            body: '@Fred Solovyev I would rather not close this out for now…',
+                            date: 'July 14, 2025 at 8:45 AM',
+                            images: [],
+                            links: []
+                        }
+                    ],
+                    attachments: [
+                        {
+                            data: 'base64string...',
+                            mime: 'image/png',
+                            name: 'image-20250703-191721.png',
+                            size: 145539,
+                            tooBig: false,
+                            url: 'blob:https://amtech.atlassian.net/86ef9a01-37c3-48cb-83aa-4afeac66f672'
+                        }
+                    ],
+                    components: ['Accounts Receivable'],
+                    customFields: {
+                        acceptance_criteria: 'Add Attachment',
+                        issue_type: 'Bug',
+                        labels: 'Regression, Rework'
+                    },
+                    processingComplete: true,
+                    scrapedAt: '2025-07-15T23:56:47.427Z'
+                }
+            }
+
+            mockGenerateObject.mockResolvedValue({
+                object: mockGeneratedDocument
+            })
+
+            const request = new NextRequest('http://localhost:3000/api/analyze-ticket', {
+                method: 'POST',
+                body: JSON.stringify(realDataPayload)
+            })
+
+            const response = await POST(request)
+            const responseData = await response.json()
+
+            expect(response.status).toBe(200)
+            expect(responseData.metadata.ticketId).toBe('EN-8775')
+
+            // Verify the AI was called with real data context
+            // Verify the AI was called with real data context
+            const callArgs = mockGenerateObject.mock.calls[0][0]
+            expect(callArgs.prompt).toContain('EN-8775')
+            expect(callArgs.prompt).toContain('Accounts Receivable')
+            expect(callArgs.prompt).toContain('Fred Solovyev')
+        })
+    })
+})

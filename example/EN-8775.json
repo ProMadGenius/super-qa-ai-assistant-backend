@@ -1,0 +1,267 @@
+{
+    
+    "assignee": "Fred Solovyev",
+    "attachments": [
+        {
+            "data": "base64string...",
+            "mime": "image/png",
+            "name": "image-20250703-191721.png",
+            "size": 145539,
+            "tooBig": false,
+            "url": "blob:https://amtech.atlassian.net/86ef9a01-37c3-48cb-83aa-4afeac66f672"
+        },
+        {
+            "data": "base64string...",
+            "mime": "text/csv",
+            "name": "EN-8775 Possible dups.csv",
+            "size": 28864,
+            "tooBig": false,
+            "url": "blob:https://amtech.atlassian.net/ee9eb30c-5747-4049-afdf-ab206bccab76"
+        },
+        {
+            "data": "base64string...",
+            "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "name": "BOA OUTPUT files.xlsx",
+            "size": 13442,
+            "tooBig": false,
+            "url": "blob:https://amtech.atlassian.net/ead9e4d5-e6a1-4764-8eac-24913d43f3c9"
+        },
+        {
+            "data": "base64string...",
+            "mime": "image/png",
+            "name": "image-20250508-202131.png",
+            "size": 57366,
+            "tooBig": false,
+            "url": "blob:https://amtech.atlassian.net/1c6a10b0-e7a3-4ded-8202-bae17e5e2064"
+        },
+        {
+            "data": "base64string...",
+            "mime": "image/png",
+            "name": "EN-8775 Journal Entries Update.sql",
+            "size": 31507,
+            "tooBig": false,
+            "url": "blob:https://amtech.atlassian.net/f268ea4c-49b3-4f5d-a059-712197dd2eba"
+        },
+        {
+            "data": "base64string...",
+            "mime": "image/png",
+            "name": "image-20250325-164601.png",
+            "size": 87203,
+            "tooBig": false,
+            "url": "blob:https://amtech.atlassian.net/cb2de7a6-82d2-477b-b633-8b40fc38a2de"
+        }
+    ],
+    "comments": [
+        {
+            "author": "Lisa Thomas",
+            "body": "@Fred Solovyev I would rather not close this out for now… I’d like to keep it open. I think it would be helpful if we set up a meeting with the customer to go over the exact transactions that need to be corrected. I will review on my own today or possibly tomorrow and let you know once I schedule something with the customer. Thanks.",
+            "date": "July 14, 2025 at 8:45 AM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas, sounds good. Thanks",
+            "date": "July 14, 2025 at 9:37 AM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas, do you think we can close this one for now and open a new one when we have a better description of the issue and acceptance criteria? Thanks cc @Mendi Brent",
+            "date": "July 14, 2025 at 8:38 AM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas , I started to check invoices in the BOA file and don't see as many duplicates in S1DFW250311 db as it would be if the file was imported twice. There are 68 invoices in the file and 20 possible dups I can find. Please see the csv file attached. Also, in CASHRECEIPTS tbls there are records which look like were added manually. What do you think? Thanks cc @Gary Poindexter",
+            "date": "July 3, 2025 at 3:18 PM",
+            "images": [
+                {
+                    "alt": "image-20250703-191721.png",
+                    "filename": "31d7a2eb-82fc-4d20-8284-7b52c49d5531",
+                    "height": 319,
+                    "isAttachment": true,
+                    "mimeType": "image/png",
+                    "src": "blob:https://amtech.atlassian.net/31d7a2eb-82fc-4d20-8284-7b52c49d5531#media-blob-url=true&id=54a2c4a0-073f-4643-9237-54e4b311cbb2&collection=&contextId=71151&width=890&height=222&alt=image-20250703-191721.png",
+                    "title": "",
+                    "width": 1280
+                }
+            ],
+            "links": []
+        },
+        {
+            "author": "Mendi Brent",
+            "body": "Moving to July per Lisa",
+            "date": "June 11, 2025 at 9:36 AM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Mendi Brent",
+            "body": "@Lisa Thomas - Code freeze is this Wednesday if we need this in the June release",
+            "date": "June 9, 2025 at 10:07 AM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas , based on what we know it’s difficult to determine what invoices are affected and can be deleted. I don’t think we can rely on the payment dates provided. Would be helpful if we can get copies of the files imported. Thanks",
+            "date": "May 19, 2025 at 3:06 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas , Gary and I looked at the dates discrepancies and Gary suggested the scenario of what happened: They imported on the Feb dates you mentioned Waited for a while, then posted AR to GL first of March Downloaded and Imported the files again in early April. This is when the CO records were created. Held off posting AR to GL until the end or April Reported the issue to Amtech. Based on what we know it’s difficult to determine what invoices are affected and can be deleted. Would be helpful if we can get copies the files imported. Thanks cc @Gary Poindexter",
+            "date": "May 9, 2025 at 4:17 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas , I pulled the data from CASHDETAIL and CASHRECEIPTS tbls for invoices that are mentioned in the description 394871,395500 ,395676. It looks like only 394871 belongs to the time interval in question. It makes me wonder if the dates or invoices are correct. Please take a look. Thanks cc @Gary Poindexter",
+            "date": "May 8, 2025 at 4:21 PM",
+            "images": [
+                {
+                    "alt": "image-20250508-202131.png",
+                    "filename": "a54d2144-f20d-4ee8-8d80-d20cf4310a34",
+                    "height": 205,
+                    "isAttachment": true,
+                    "mimeType": "image/png",
+                    "src": "blob:https://amtech.atlassian.net/a54d2144-f20d-4ee8-8d80-d20cf4310a34#media-blob-url=true&id=c69ec427-6508-4e8f-93c3-c7eeb0c8658b&collection=&contextId=71151&mimeType=image%2Fpng&name=image-20250508-202131.png&size=255074&width=843&height=135&alt=image-20250508-202131.png",
+                    "title": "",
+                    "width": 1280
+                }
+            ],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Lisa Thomas , I updated the script. Please review. Thanks cc @Gary Poindexter",
+            "date": "April 17, 2025 at 4:44 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Lisa Thomas",
+            "body": "@Fred Solovyev In reviewing the attached scripts, I have questions: The dates provided in the scripts are not the same dates as the dates in the repro. Correct dates are 2/23, 2/26, 2/27, 2/28 and 2/29. You only have 4 days listed in your scripts. Should we delete the cashdetail records PRIOR to deleting the cashreceipts records, so that the detail records do not get orphaned? We are removing ALL cash receipts done for those days… did the customer enter any MANUAL cash receipts for those days? I can find out from the customer. Customer wants the duplicate cash receipts removed from their system, and would like the INVOICES to be changed to OPEN, so that cash can be applied properly. I didn’t see scripts for this. This will need to be reworked again prior to correcting the data on the customers' test system. @Tina Lampus @Gary Poindexter",
+            "date": "April 17, 2025 at 10:25 AM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Lisa Thomas",
+            "body": "@Fred Solovyev Yes… I have a network task created as of yesterday to request Managed Services copy over SC1514 (their LIVE prod system) to SC1514TST (their test database) on their system to run the scripts/process you provided below. Since they can’t currently send their test database TO US. Once a fresh test db is in place, I would like to run procedure you provided including scripts in the SC1514TST database and then have the customer review. Once the db is ready, I will let you know and you can assist with the process. @Jean Davies - FYI",
+            "date": "April 15, 2025 at 2:52 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Jean Davies @Lisa Thomas , can we meet to review a workable fix path for this data issue. Thanks cc @Mendi Brent",
+            "date": "April 15, 2025 at 2:44 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Exalate",
+            "body": "Tina Lampus commented: @Jean Davies​ @Lisa Thomas​ Just putting the @ mentions here so that you see the information from Fred.",
+            "date": "April 2, 2025 at 5:15 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Jean Davies @Lisa Thomas , I attached the update script. I think it will be a workable fix path for this data issue. Thanks cc @Mendi Brent",
+            "date": "March 27, 2025 at 2:26 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Tina Lampus , I used S1DFW250311 db on 204 to pull up the transactions for these dates. I can create a script to clean corresponding records in CASHRECEIPTS and CASHDETAIL tables for these GLXACT(s). The customer can manually apply the cash, reverse GLXACT(s) using our new REVERSE GL TRANSACTIONS tool in JE and repost to GL. I think it will be a workable fix path for this data issue. Thanks cc @Gary Poindexter @Mendi Brent",
+            "date": "March 25, 2025 at 12:56 PM",
+            "images": [
+                {
+                    "alt": "image-20250325-164601.png",
+                    "filename": "d1ca56ab-bdbf-40f7-b8a7-62366b209b7d",
+                    "height": 326,
+                    "isAttachment": true,
+                    "mimeType": "image/png",
+                    "src": "blob:https://amtech.atlassian.net/d1ca56ab-bdbf-40f7-b8a7-62366b209b7d#media-blob-url=true&id=1de450fc-8a02-4480-80a1-f26f7d16c1bf&collection=&contextId=71151&mimeType=image%2Fpng&name=image-20250325-164601.png&size=333625&width=895&height=228&alt=image-20250325-164601.png",
+                    "title": "",
+                    "width": 1280
+                }
+            ],
+            "links": []
+        },
+        {
+            "author": "Tina Lampus",
+            "body": "This is the second rework.The first rework was [[EN-4739: REWORK Unable to reverse these payments and correct them because I have no way to pull up the transaction.Done](https://amtech.atlassian.net/browse/EN-4739)](https://amtech.atlassian.net/browse/EN-4739) The original fix was in iServe under CS0661432.",
+            "date": "March 24, 2025 at 8:57 AM",
+            "images": [],
+            "links": [
+                "https://amtech.atlassian.net/browse/EN-4739",
+                "https://amtech.atlassian.net/browse/EN-4739"
+            ]
+        },
+        {
+            "author": "Exalate",
+            "body": "Kayla Eddy commented: @Tina Lampus​ please update Jira S1DFW250311 AMFSDB204",
+            "date": "March 12, 2025 at 2:41 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Exalate",
+            "body": "Tina Lampus commented: @Kayla Eddy​ Thank you!",
+            "date": "March 11, 2025 at 6:57 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Exalate",
+            "body": "Kayla Eddy commented: have requested new database.",
+            "date": "March 11, 2025 at 5:00 PM",
+            "images": [],
+            "links": []
+        },
+        {
+            "author": "Fred Solovyev",
+            "body": "@Tina Lampus, it looks like we don't have S1DFW240320 AMFSDB204 anymore. Could you please request a new copy of this db. Thanks",
+            "date": "March 11, 2025 at 4:56 PM",
+            "images": [],
+            "links": []
+        }
+    ],
+    "components": [
+        "Accounts Receivable"
+    ],
+    "customFields": {
+        "acceptance_criteria": "Add Attachment",
+        "affects_versions": "None",
+        "change_log": "Descriptionin reference to case 661432.Using a payment made from LabCorp as a reference this is what I found.Image 1 shows the ACH Payment made on 2-23-2024.LabCorp's remittance referenced the two invoices listed.These amounts were CO'd on the account as you can see in image 2.When looking at invoices 395500 and 395676 they are both closed, you can see this on images 3&4.Image 5 shows what the check details should look like on a closed invoice paid by ACH. Image 6 shows what the check details look like for both invoices.No information is given on how why or when these invoices were closed. I am unable to reverse these payments and correct them because I have no way to pull up the transaction as I have nothing to reference. There are multiple payments like this from multiple days.Open one of the referenced payments. No check data is attached the invoice yet the invoice is closed. Multiple invoices and payments credit to the accts.",
+        "date-inline-edit": "None",
+        "fix_versions": "K2_2025.07.0.0",
+        "issue_type": "Bug",
+        "labels": "Regression, Rework",
+        "original-estimate-inline-edit": "12h",
+        "release_notes": "Descriptionin reference to case 661432.Using a payment made from LabCorp as a reference this is what I found.Image 1 shows the ACH Payment made on 2-23-2024.LabCorp's remittance referenced the two invoices listed.These amounts were CO'd on the account as you can see in image 2.When looking at invoices 395500 and 395676 they are both closed, you can see this on images 3&4.Image 5 shows what the check details should look like on a closed invoice paid by ACH. Image 6 shows what the check details look like for both invoices.No information is given on how why or when these invoices were closed. I am unable to reverse these payments and correct them because I have no way to pull up the transaction as I have nothing to reference. There are multiple payments like this from multiple days.Open one of the referenced payments. No check data is attached the invoice yet the invoice is closed. Multiple invoices and payments credit to the accts.",
+        "rich-text": "ACH",
+        "select": "Accounts Receivable",
+        "single-line-text-inline-edit": "None",
+        "steps_to_reproduce": "REWORK: Customer stated they had tested in SC1514TST and are experiencing the same results. /ke 2/5/25\r\n\r\n\r\nS1DFW240320 AMFSDB204 EnCore K2\r\n\r\nBehavior: BofA files were brought in twice via AMTSRVPROC and applied cash on account. Because there are no check details on the payments, user cannot reverse the payments. When the file was brought in the 2nd time, the 2nd round was entered as Cash on Account ( CO) transactions ( because it couldn't find the invoices, because they were already closed)\r\n\r\nDates are as follows:\r\n2/23/24 \r\n2/26/24\r\n2/27/24\r\n2/28/24\r\n2/29/24\r\n\r\nWe have duplicated in the test environment S1DFW240320\r\n\r\nEncoreK2\r\nFinancials \r\nAccounts Receivable \r\nOpen Closed Items\r\nCustomer 7510\r\nmega menu > closed & check detail CHECKED \r\ninvoice 394871 paid on check CH010761 $1168.92\r\n\r\nAMTSRVPROC\r\n(file has been renamed to .txt file)\r\nPoll for EDI Transactions > Run Now \r\n\r\nGo back into Encore and repeat first steps to see cash on account \r\nEncoreK2\r\nFinancials \r\nAccounts Receivable \r\nOpen Closed Items\r\nCustomer 7510\r\nmega menu > closed & check detail CHECKED \r\nCO $1168.92\r\n\r\nNOTE: We need assistance with data correction for ALL PAYMENTS for these 5 days.  We may need to have a conversation with Lisa and dev to formulate a plan for data correction.  Ideally, we would like to pull back all the cash receipts trx for these days from the GL , then remove the cash receipts transactions in AR, Mark the affected invoices as unpaid ( open), and  then re-process the EDI files for ALL invoices/cash receipts on these days.  Then repost to General Ledger.   Customer would be ok if we just pulled the j/e's back, and removed the erroneous cash receipts, and put the invoices back to OPEN: they could manually apply the cash.  We are open to best method for correcting data programmatically.\r\n\r\n* Note: Another dev task/separate case will be to address the system allowing the Bank of America file to be processed twice for the same data. \r\n\r\n\\ke  4/10/24",
+        "user": "Fred SolovyevFred Solovyev"
+    },
+    "description": "in reference to case 661432.Using a payment made from LabCorp as a reference this is what I found.Image 1 shows the ACH Payment made on 2-23-2024.LabCorp's remittance referenced the two invoices listed.These amounts were CO'd on the account as you can see in image 2.When looking at invoices 395500 and 395676 they are both closed, you can see this on images 3&4.Image 5 shows what the check details should look like on a closed invoice paid by ACH. Image 6 shows what the check details look like for both invoices.No information is given on how why or when these invoices were closed. I am unable to reverse these payments and correct them because I have no way to pull up the transaction as I have nothing to reference. There are multiple payments like this from multiple days.Open one of the referenced payments. No check data is attached the invoice yet the invoice is closed. Multiple invoices and payments credit to the accts.",
+    "issueKey": "EN-8775",
+    "issueType": "Bug",
+    "priority": "Priority: Normal",
+    "processingComplete": true,
+    "reporter": "Exalate",
+    "scrapedAt": "2025-07-15T23:56:47.427Z",
+    "status": "Done",
+    "summary": "REWORK Unable to reverse these payments and correct them because I have no way to pull up the transaction."
+}

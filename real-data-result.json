@@ -1,0 +1,158 @@
+{
+  "ticketSummary": {
+    "problem": "Users are unable to reverse payments and correct them due to missing transaction references, particularly when dealing with ACH payments that have been applied to closed invoices.",
+    "solution": "Implement a solution to allow users to access and reverse ACH payment transactions even if the associated invoices are closed, ensuring that all necessary transaction details are visible and accessible.",
+    "context": "This issue affects the Accounts Receivable component, where multiple payments from different days are involved, and users need to correct these transactions. The problem was replicated in a test environment, indicating a need for a systematic fix to handle such cases."
+  },
+  "configurationWarnings": [],
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "title": "Access to ACH Payment Transactions",
+      "description": "Users must be able to access ACH payment transactions even if the associated invoices are closed, allowing them to reverse payments if necessary.",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "AC-2",
+      "title": "Visibility of Transaction Details",
+      "description": "All necessary transaction details, including check data, must be visible and accessible for closed invoices paid by ACH.",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "AC-3",
+      "title": "Prevention of Duplicate File Processing",
+      "description": "The system must prevent the same Bank of America file from being processed twice for the same data to avoid duplicate transactions.",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "AC-4",
+      "title": "Data Correction Capability",
+      "description": "Users must have the capability to correct data for payments and invoices affected by duplicate processing, including marking invoices as unpaid and re-processing EDI files.",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "AC-5",
+      "title": "Database Integrity",
+      "description": "Ensure that database changes maintain integrity, particularly when reversing payments and re-processing transactions.",
+      "priority": "must",
+      "category": "database",
+      "testable": true
+    }
+  ],
+  "testCases": [
+    {
+      "format": "gherkin",
+      "id": "TC-1",
+      "category": "functional",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Access ACH Payment Transactions for Closed Invoices",
+        "given": [
+          "A user is logged into the Accounts Receivable system",
+          "Invoices are closed with ACH payments applied"
+        ],
+        "when": ["The user attempts to access the ACH payment transaction"],
+        "then": [
+          "The user can view and reverse the payment transaction details"
+        ],
+        "tags": []
+      }
+    },
+    {
+      "format": "gherkin",
+      "id": "TC-2",
+      "category": "functional",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Visibility of Transaction Details for Closed Invoices",
+        "given": ["A user is viewing a closed invoice paid by ACH"],
+        "when": ["The user checks the transaction details"],
+        "then": [
+          "All transaction details, including check data, are visible and accessible"
+        ],
+        "tags": []
+      }
+    },
+    {
+      "format": "gherkin",
+      "id": "TC-3",
+      "category": "functional",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Prevent Duplicate File Processing",
+        "given": ["A Bank of America file has been processed once"],
+        "when": ["The same file is attempted to be processed again"],
+        "then": ["The system prevents the file from being processed again"],
+        "tags": []
+      }
+    },
+    {
+      "format": "gherkin",
+      "id": "TC-4",
+      "category": "functional",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Correct Data for Duplicate Processed Payments",
+        "given": [
+          "Payments have been processed twice due to duplicate file processing"
+        ],
+        "when": ["The user attempts to correct the data"],
+        "then": [
+          "The user can mark invoices as unpaid and re-process EDI files"
+        ],
+        "tags": []
+      }
+    },
+    {
+      "format": "gherkin",
+      "id": "TC-5",
+      "category": "database",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Maintain Database Integrity During Reversal",
+        "given": [
+          "Payments are being reversed and transactions are being re-processed"
+        ],
+        "when": ["Database changes are applied"],
+        "then": ["Database integrity is maintained throughout the process"],
+        "tags": []
+      }
+    }
+  ],
+  "metadata": {
+    "generatedAt": "2025-07-16T03:24:46.065Z",
+    "qaProfile": {
+      "qaCategories": {
+        "functional": true,
+        "ux": false,
+        "ui": false,
+        "negative": true,
+        "api": false,
+        "database": true,
+        "performance": false,
+        "security": false,
+        "mobile": false,
+        "accessibility": false
+      },
+      "testCaseFormat": "gherkin",
+      "autoRefresh": true,
+      "includeComments": true,
+      "includeImages": true,
+      "operationMode": "offline",
+      "showNotifications": true
+    },
+    "ticketId": "EN-8775",
+    "documentVersion": "1.0",
+    "aiModel": "gpt-4o",
+    "generationTime": 12589,
+    "wordCount": 383
+  }
+}
