@@ -1,9 +1,10 @@
-const fetch = require('node-fetch');
+// Using ES modules syntax for better compatibility
+import fetch from 'node-fetch';
 
-// URL del endpoint (ajusta según tu entorno)
+// URL of the endpoint (adjust according to your environment)
 const API_URL = 'http://localhost:3000/api/generate-suggestions';
 
-// Payload válido basado en las pruebas
+// Valid payload based on tests
 const validPayload = {
   currentDocument: {
     ticketSummary: {
@@ -75,7 +76,7 @@ const validPayload = {
 
 async function testGenerateSuggestions() {
   try {
-    console.log('Enviando solicitud al endpoint generate-suggestions...');
+    console.log('Sending request to generate-suggestions endpoint...');
     
     const response = await fetch(API_URL, {
       method: 'POST',
@@ -86,16 +87,16 @@ async function testGenerateSuggestions() {
     });
 
     if (response.ok) {
-      console.log('Respuesta exitosa (código de estado:', response.status, ')');
+      console.log('Successful response (status code:', response.status, ')');
       const data = await response.json();
-      console.log('Respuesta:', JSON.stringify(data, null, 2));
+      console.log('Response:', JSON.stringify(data, null, 2));
     } else {
-      console.error('Error en la solicitud:', response.status);
+      console.error('Request error:', response.status);
       const errorData = await response.json();
-      console.error('Detalles del error:', JSON.stringify(errorData, null, 2));
+      console.error('Error details:', JSON.stringify(errorData, null, 2));
     }
   } catch (error) {
-    console.error('Error al realizar la solicitud:', error);
+    console.error('Error making request:', error);
   }
 }
 

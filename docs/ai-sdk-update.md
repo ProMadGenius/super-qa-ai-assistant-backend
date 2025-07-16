@@ -16,47 +16,59 @@ The main issue was that the `convertToCoreMessages` function from the 'ai' packa
 - Added comments to clarify that the AI SDK v5 automatically converts messages to the CoreMessage format
 
 **Before:**
+
 ```typescript
 // Previous implementation might have used convertToCoreMessages
-import { convertToCoreMessages } from 'ai';
+import { convertToCoreMessages } from "ai";
 
-export function transformMessagesForAI(messages: UIMessage[], context?: SystemPromptContext): any[] {
+export function transformMessagesForAI(
+  messages: UIMessage[],
+  context?: SystemPromptContext
+): any[] {
   // Filter out system messages
-  const userAndAssistantMessages = messages.filter(msg => msg.role !== 'system');
-  
+  const userAndAssistantMessages = messages.filter(
+    (msg) => msg.role !== "system"
+  );
+
   // Convert to model messages using the SDK function
   const modelMessages = convertToCoreMessages(userAndAssistantMessages);
-  
+
   // Add enhanced context if provided
   if (context) {
     const systemMessage = buildEnhancedSystemMessage(context);
     return [systemMessage, ...modelMessages];
   }
-  
+
   return modelMessages;
 }
 ```
 
 **After:**
+
 ```typescript
-export function transformMessagesForAI(messages: UIMessage[], context?: SystemPromptContext): any[] {
+export function transformMessagesForAI(
+  messages: UIMessage[],
+  context?: SystemPromptContext
+): any[] {
   // Filter out system messages that should be handled separately
-  const userAndAssistantMessages = messages.filter(msg => msg.role !== 'system');
-  
+  const userAndAssistantMessages = messages.filter(
+    (msg) => msg.role !== "system"
+  );
+
   // Convert to model messages directly (AI SDK v5 handles conversion automatically)
-  const modelMessages = userAndAssistantMessages.map(msg => ({
+  const modelMessages = userAndAssistantMessages.map((msg) => ({
     role: msg.role,
-    content: msg.content
+    content: msg.content,
     // Note: createdAt is omitted to match test expectations
   }));
-  
+
   // Add enhanced context if provided
   if (context) {
     // Prepend system message with context
     const systemMessage = buildEnhancedSystemMessage(context);
     return [systemMessage, ...modelMessages];
   }
-  
+
   return modelMessages;
 }
 ```
@@ -87,6 +99,9 @@ Two testing scripts were created to manually test the API endpoints:
 This script tests the `/api/update-canvas` endpoint, which handles conversational refinement of QA documentation. It sends a request with a sample document and a user message, and receives a streaming response with AI-generated suggestions.
 
 ```javascript
+// Using ES modules syntax for better compatibility
+import fetch from 'node-fetch';
+
 // Example usage
 node test-update-canvas.js
 ```
@@ -96,6 +111,9 @@ node test-update-canvas.js
 This script tests the `/api/generate-suggestions` endpoint, which generates structured suggestions for improving test coverage. It sends a request with a sample document and receives a JSON response with structured suggestions.
 
 ```javascript
+// Using ES modules syntax for better compatibility
+import fetch from 'node-fetch';
+
 // Example usage
 node test-generate-suggestions.js
 ```
