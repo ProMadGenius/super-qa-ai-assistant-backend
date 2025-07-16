@@ -1,0 +1,24 @@
+{
+  "name": "Verificación de Código y Documentación",
+  "description": "Verifica errores en el código y actualiza la documentación automáticamente",
+  "trigger": {
+    "type": "file_save",
+    "patterns": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "src/**/*.js",
+      "src/**/*.jsx"
+    ]
+  },
+  "actions": [
+    {
+      "type": "agent_execution",
+      "prompt": "Analiza el archivo guardado y verifica que no existan errores de TypeScript, problemas de tipos, o inconsistencias en el código. Si encuentras errores:\n\n1. Identifica y corrige todos los errores de tipos de TypeScript\n2. Verifica que las importaciones y exportaciones sean correctas\n3. Asegúrate de que los esquemas Zod estén bien definidos\n4. Revisa la compatibilidad entre interfaces y tipos\n\nDespués de corregir errores, actualiza la documentación relevante:\n\n1. Actualiza comentarios JSDoc si es necesario\n2. Revisa y actualiza el README.md si hay cambios significativos\n3. Actualiza documentación de API si se modificaron endpoints\n4. Verifica que los ejemplos en la documentación sigan siendo válidos\n\nProporciona un resumen de los cambios realizados.",
+      "context": [
+        "#File",
+        "#Problems"
+      ]
+    }
+  ],
+  "enabled": true
+}

@@ -19,7 +19,7 @@ export interface TicketSummary {
  * Configuration warning structure
  */
 export interface ConfigurationWarning {
-  type: 'qa_category_mismatch' | 'format_recommendation' | 'missing_information'
+  type: 'category_mismatch' | 'missing_capability' | 'recommendation'
   title: string
   message: string
   recommendation: string
@@ -176,7 +176,7 @@ export function detectConfigurationConflicts(
   // Check for API testing needs
   if (requiresAPITesting(ticket) && !qaProfile.qaCategories.api) {
     warnings.push({
-      type: 'qa_category_mismatch',
+      type: 'category_mismatch',
       title: 'API Testing Recommended',
       message: 'This ticket appears to involve API changes or integrations, but API testing is disabled in your QA profile.',
       recommendation: 'Consider enabling API testing category to ensure comprehensive coverage of backend functionality.',
@@ -187,7 +187,7 @@ export function detectConfigurationConflicts(
   // Check for database testing needs
   if (requiresDatabaseTesting(ticket) && !qaProfile.qaCategories.database) {
     warnings.push({
-      type: 'qa_category_mismatch',
+      type: 'category_mismatch',
       title: 'Database Testing Recommended',
       message: 'This ticket involves database changes or data operations, but database testing is disabled.',
       recommendation: 'Enable database testing category to cover data integrity, migrations, and query performance.',
@@ -198,7 +198,7 @@ export function detectConfigurationConflicts(
   // Check for security testing needs
   if (requiresSecurityTesting(ticket) && !qaProfile.qaCategories.security) {
     warnings.push({
-      type: 'qa_category_mismatch',
+      type: 'category_mismatch',
       title: 'Security Testing Recommended',
       message: 'This ticket involves authentication, authorization, or sensitive data handling.',
       recommendation: 'Enable security testing category to ensure proper validation of security controls.',
@@ -209,7 +209,7 @@ export function detectConfigurationConflicts(
   // Check for performance testing needs
   if (requiresPerformanceTesting(ticket) && !qaProfile.qaCategories.performance) {
     warnings.push({
-      type: 'qa_category_mismatch',
+      type: 'category_mismatch',
       title: 'Performance Testing Recommended',
       message: 'This ticket may impact system performance or involves large data operations.',
       recommendation: 'Consider enabling performance testing to validate response times and resource usage.',
@@ -220,7 +220,7 @@ export function detectConfigurationConflicts(
   // Check for mobile testing needs
   if (requiresMobileTesting(ticket) && !qaProfile.qaCategories.mobile) {
     warnings.push({
-      type: 'qa_category_mismatch',
+      type: 'category_mismatch',
       title: 'Mobile Testing Recommended',
       message: 'This ticket affects mobile functionality or responsive design.',
       recommendation: 'Enable mobile testing category to ensure cross-device compatibility.',
@@ -231,7 +231,7 @@ export function detectConfigurationConflicts(
   // Check for accessibility testing needs
   if (requiresAccessibilityTesting(ticket) && !qaProfile.qaCategories.accessibility) {
     warnings.push({
-      type: 'qa_category_mismatch',
+      type: 'category_mismatch',
       title: 'Accessibility Testing Recommended',
       message: 'This ticket involves UI changes that may affect accessibility compliance.',
       recommendation: 'Enable accessibility testing to ensure WCAG compliance and inclusive design.',
@@ -339,7 +339,7 @@ function recommendTestCaseFormat(ticket: JiraTicket, qaProfile: QAProfile): Conf
       (content.includes('user') || content.includes('customer') || 
        content.includes('interface') || ticket.issueType.toLowerCase().includes('story'))) {
     return {
-      type: 'format_recommendation',
+      type: 'recommendation',
       title: 'Gherkin Format Recommended',
       message: 'This user-facing feature would benefit from Gherkin format for better stakeholder communication.',
       recommendation: 'Consider using Gherkin format (Given-When-Then) for clearer business requirement validation.',
@@ -352,7 +352,7 @@ function recommendTestCaseFormat(ticket: JiraTicket, qaProfile: QAProfile): Conf
       (content.includes('data') || content.includes('import') || 
        content.includes('export') || content.includes('batch'))) {
     return {
-      type: 'format_recommendation',
+      type: 'recommendation',
       title: 'Table Format Recommended',
       message: 'This data-focused ticket would benefit from table format for systematic data validation.',
       recommendation: 'Consider using table format for comprehensive data scenario coverage.',

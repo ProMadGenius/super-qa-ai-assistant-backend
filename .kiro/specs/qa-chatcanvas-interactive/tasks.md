@@ -34,7 +34,7 @@
   - Write tests for tool parameter schema validation
   - _Requirements: 4.2, 4.4_
 
-- [ ] 3. Implement initial ticket analysis endpoint
+- [x] 3. Implement initial ticket analysis endpoint
 - [x] 3.1 Create /api/analyze-ticket route handler
 
   - Set up Next.js App Router route handler structure
@@ -62,7 +62,7 @@
   - Write comprehensive tests for document generation with various ticket types
   - _Requirements: 2.1, 2.2, 2.3, 7.3, 7.4_
 
-- [ ] 4. Build conversational refinement system
+- [x] 4. Build conversational refinement system
 - [x] 4.1 Create /api/update-canvas route handler
 
   - Set up streaming endpoint using Next.js App Router
@@ -91,7 +91,7 @@
   - _Requirements: 3.2, 3.3, 8.3_
 
 - [ ] 5. Create suggestion generation system
-- [ ] 5.1 Implement /api/generate-suggestions endpoint
+- [x] 5.1 Implement /api/generate-suggestions endpoint
 
   - Create route handler for structured suggestion generation
   - Add document context processing from request payload

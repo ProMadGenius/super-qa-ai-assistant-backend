@@ -100,7 +100,7 @@ export async function regenerateDocument(
         ticketId: context.ticketData.issueKey,
         documentVersion: incrementVersion(context.originalDocument.metadata.documentVersion || '1.0'),
         aiModel: mergedOptions.model!,
-        regenerationTime: Date.now() - startTime,
+        generationTime: Date.now() - startTime,
         previousVersion: context.originalDocument.metadata.documentVersion || '1.0',
         regenerationReason: extractRegenerationReason(context.userFeedback)
       }

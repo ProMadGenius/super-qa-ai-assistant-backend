@@ -3,7 +3,7 @@
  * Handles conversion between UI messages and AI model messages
  */
 
-import { convertToModelMessages } from 'ai'
+import { convertToCoreMessages } from 'ai'
 import { QACanvasDocument } from '../schemas/QACanvasDocument'
 
 /**
@@ -13,7 +13,7 @@ export interface UIMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  createdAt?: string
+  createdAt?: Date | string
   metadata?: Record<string, any>
 }
 
@@ -40,7 +40,11 @@ export function transformMessagesForAI(
   const userAndAssistantMessages = messages.filter(msg => msg.role !== 'system')
   
   // Convert to model messages using Vercel AI SDK
-  const modelMessages = convertToModelMessages(userAndAssistantMessages)
+  const modelMessages = convertToCoreMessages(userAndAssistantMessages.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+    createdAt: typeof msg.createdAt === 'string' ? new Date(msg.createdAt) : msg.createdAt
+  })))
   
   // Add enhanced context if provided
   if (context) {

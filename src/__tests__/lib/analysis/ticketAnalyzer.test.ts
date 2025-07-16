@@ -20,7 +20,9 @@ describe('Ticket Analyzer', () => {
       {
         author: 'Developer',
         date: '2024-01-15',
-        body: 'This appears to be a CSS issue with touch event handling. Need to fix the button styles.'
+        body: 'This appears to be a CSS issue with touch event handling. Need to fix the button styles.',
+        images: [],
+        links: []
       }
     ],
     attachments: [],
@@ -126,7 +128,7 @@ describe('Ticket Analyzer', () => {
       
       const warnings = detectConfigurationConflicts(mockFeatureTicket, qaProfileWithoutAPI)
       
-      const apiWarning = warnings.find(w => w.type === 'qa_category_mismatch' && w.title.includes('API'))
+      const apiWarning = warnings.find(w => w.type === 'category_mismatch' && w.title.includes('API'))
       expect(apiWarning).toBeDefined()
       expect(apiWarning?.severity).toBe('high')
       expect(apiWarning?.message).toContain('API testing is disabled')
@@ -173,7 +175,7 @@ describe('Ticket Analyzer', () => {
       
       const warnings = detectConfigurationConflicts(mockFeatureTicket, qaProfileWithSteps)
       
-      const formatWarning = warnings.find(w => w.type === 'format_recommendation')
+      const formatWarning = warnings.find(w => w.type === 'recommendation')
       expect(formatWarning?.title).toContain('Gherkin')
       expect(formatWarning?.severity).toBe('low')
     })

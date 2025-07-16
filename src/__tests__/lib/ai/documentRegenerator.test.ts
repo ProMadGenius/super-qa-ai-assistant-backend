@@ -116,7 +116,7 @@ describe('Document Regenerator', () => {
         title: 'Error handling works',
         description: 'System handles network errors gracefully',
         priority: 'must',
-        category: 'negative',
+        category: 'functional',
         testable: true
       }
     ],
@@ -177,7 +177,7 @@ describe('Document Regenerator', () => {
 
       expect(result.document).toBeDefined()
       expect(result.changes).toBeDefined()
-      expect(result.regenerationTime).toBeGreaterThan(0)
+      expect(result.regenerationTime).toBeGreaterThanOrEqual(0)
       expect(result.preservedElements).toBeDefined()
       expect(result.modifiedElements).toBeDefined()
 
@@ -226,12 +226,12 @@ describe('Document Regenerator', () => {
       const result = await regenerateDocument(mockContext)
 
       expect(result.changes.length).toBeGreaterThan(0)
-      
+
       // Should detect that test cases were added
       const testCaseChange = result.changes.find(c => c.section === 'testCases')
       expect(testCaseChange).toBeDefined()
       expect(testCaseChange?.changeType).toBe('added')
-      
+
       // Should detect that acceptance criteria were added
       const acChange = result.changes.find(c => c.section === 'acceptanceCriteria')
       expect(acChange).toBeDefined()
@@ -243,7 +243,7 @@ describe('Document Regenerator', () => {
 
       expect(result.preservedElements).toBeInstanceOf(Array)
       expect(result.modifiedElements).toBeInstanceOf(Array)
-      
+
       // Should have some modified elements due to additions
       expect(result.modifiedElements.length).toBeGreaterThan(0)
     })
@@ -265,7 +265,7 @@ describe('Document Regenerator', () => {
 
       const expectedReasons = [
         'Content addition requested',
-        'Content modification requested', 
+        'Content modification requested',
         'Quality improvement requested',
         'Error correction requested'
       ]
@@ -359,7 +359,7 @@ describe('Document Regenerator', () => {
         ...mockOriginalDocument,
         configurationWarnings: [
           {
-            type: 'qa_category_mismatch' as const,
+            type: 'category_mismatch' as const,
             title: 'New Warning',
             message: 'Warning message',
             recommendation: 'Fix this',

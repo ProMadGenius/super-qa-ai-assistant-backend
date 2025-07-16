@@ -1,0 +1,20 @@
+{
+  "enabled": true,
+  "name": "Code Verification & Documentation Update",
+  "description": "Automatically checks for code errors and updates documentation when source files are modified",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "*.md",
+      "package.json",
+      "tsconfig.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Please verify that there are no errors in the code and update the documentation. Check for:\n1. TypeScript compilation errors\n2. ESLint violations\n3. Test failures\n4. Schema validation issues\n5. API endpoint functionality\n6. Update README.md and other documentation files to reflect any changes\n7. Ensure all imports and exports are correct\n8. Verify that all environment variables are properly documented\n9. Check that the code follows the established patterns and conventions"
+  }
+}

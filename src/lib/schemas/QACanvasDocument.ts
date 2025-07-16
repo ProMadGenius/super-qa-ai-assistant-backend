@@ -31,7 +31,7 @@ export const acceptanceCriterionSchema = z.object({
   title: z.string().describe('Brief title describing the criterion'),
   description: z.string().describe('Detailed description of what must be satisfied'),
   priority: z.enum(['must', 'should', 'could']).default('must').describe('MoSCoW priority level'),
-  category: z.enum(['functional', 'ui', 'ux', 'performance', 'security', 'accessibility', 'api', 'database']).describe('Category of the acceptance criterion'),
+  category: z.enum(['functional', 'ui', 'ux', 'performance', 'security', 'accessibility', 'api', 'database', 'negative', 'mobile']).describe('Category of the acceptance criterion'),
   testable: z.boolean().default(true).describe('Whether this criterion can be directly tested')
 })
 
@@ -118,7 +118,10 @@ export const documentMetadataSchema = z.object({
   documentVersion: z.string().default('1.0').describe('Document version for tracking changes'),
   aiModel: z.string().optional().describe('AI model used for generation (e.g., "gpt-4o")'),
   generationTime: z.number().optional().describe('Time taken to generate document in milliseconds'),
-  wordCount: z.number().optional().describe('Approximate word count of generated content')
+  wordCount: z.number().optional().describe('Approximate word count of generated content'),
+  previousVersion: z.string().optional().describe('Previous document version (for regenerated documents)'),
+  regenerationReason: z.string().optional().describe('Reason for document regeneration'),
+  regenerationTime: z.number().optional().describe('Time taken to regenerate document in milliseconds')
 })
 
 /**
