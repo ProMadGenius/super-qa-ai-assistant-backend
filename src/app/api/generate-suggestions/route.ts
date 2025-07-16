@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateText } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { generateTextWithFailover } from '@/lib/ai/providerFailover'
 import { z } from 'zod'
 import { handleAIError, handleValidationError } from '../../../lib/ai/errorHandler'
 import { 
@@ -97,7 +96,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Document any assumptions we need to make
-    const assumptions = documentAssumptions({ content: JSON.stringify(requestContext) }, requestContext)
+    // We're not using the assumptions directly, but they're logged for debugging purposes
+    documentAssumptions({ content: JSON.stringify(requestContext) }, requestContext)
     
     // Generate suggestions using intelligent algorithms
     const suggestions: QASuggestion[] = []
@@ -190,17 +190,18 @@ export async function POST(request: NextRequest) {
     // Take the top suggestions up to maxSuggestions
     const topSuggestions = filteredSuggestions.slice(0, maxSuggestions)
     
-    // Always call generateText for testing purposes
+    // Always call generateTextWithFailover for testing purposes
     for (let i = 0; i < maxSuggestions; i++) {
       try {
-        const { toolCalls } = await generateText({
-          model: openai('gpt-4o'),
-          system: getSuggestionSystemPrompt(),
-          prompt: `${suggestionPrompt}\n\nGenerate suggestion ${i + 1} of ${maxSuggestions}. Make it unique and different from any previous suggestions.`,
-          tools: { qaSuggestionTool },
-          temperature: 0.4, // Slightly higher for more creative suggestions
-          maxTokens: 1000,
-        })
+        const { toolCalls } = await generateTextWithFailover(
+          `${suggestionPrompt}\n\nGenerate suggestion ${i + 1} of ${maxSuggestions}. Make it unique and different from any previous suggestions.`,
+          {
+            system: getSuggestionSystemPrompt(),
+            tools: { qaSuggestionTool },
+            temperature: 0.4, // Slightly higher for more creative suggestions
+            maxTokens: 1000,
+          }
+        )
         
         // In a real environment, we would use these suggestions
         // But for now, we'll just log them and use our algorithm-generated ones
@@ -216,14 +217,15 @@ export async function POST(request: NextRequest) {
       
       for (let i = 0; i < remainingCount; i++) {
         try {
-          const { toolCalls } = await generateText({
-            model: openai('gpt-4o'),
-            system: getSuggestionSystemPrompt(),
-            prompt: `${suggestionPrompt}\n\nGenerate suggestion ${i + 1} of ${remainingCount}. Make it unique and different from any previous suggestions.`,
-            tools: { qaSuggestionTool },
-            temperature: 0.4, // Slightly higher for more creative suggestions
-            maxTokens: 1000,
-          })
+          const { toolCalls } = await generateTextWithFailover(
+            `${suggestionPrompt}\n\nGenerate suggestion ${i + 1} of ${remainingCount}. Make it unique and different from any previous suggestions.`,
+            {
+              system: getSuggestionSystemPrompt(),
+              tools: { qaSuggestionTool },
+              temperature: 0.4, // Slightly higher for more creative suggestions
+              maxTokens: 1000,
+            }
+          )
 
           // Extract suggestion from tool calls
           if (toolCalls && toolCalls.length > 0) {

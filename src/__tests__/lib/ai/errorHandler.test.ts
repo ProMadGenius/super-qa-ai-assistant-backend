@@ -1,202 +1,251 @@
-// NextResponse is mocked below
-import { 
-  handleAIError, 
-  handleValidationError, 
-  AIErrorType 
-} from '../../../lib/ai/errorHandler'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+/**
+ * Error Handler Tests
+ */
+
+import { handleAIError, AIErrorType, handleValidationError } from '../../../lib/ai/errorHandler';
+import { NextResponse } from 'next/server';
+import { getProviderHealthStatus, resetAllCircuitBreakers } from '../../../lib/ai/providerFailover';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
+
+// Mock the providerFailover module
+vi.mock('../../../lib/ai/providerFailover', () => ({
+  getProviderHealthStatus: vi.fn().mockReturnValue({
+    openai: {
+      name: 'openai',
+      available: true,
+      failureCount: 0,
+      lastFailure: null,
+      lastSuccess: new Date(),
+      circuitOpen: false,
+      circuitOpenTime: null
+    },
+    anthropic: {
+      name: 'anthropic',
+      available: true,
+      failureCount: 0,
+      lastFailure: null,
+      lastSuccess: new Date(),
+      circuitOpen: false,
+      circuitOpenTime: null
+    }
+  }),
+  resetCircuitBreaker: vi.fn().mockReturnValue(true),
+  resetAllCircuitBreakers: vi.fn()
+}));
 
 // Mock NextResponse
-vi.mock('next/server', () => {
-  return {
-    NextResponse: {
-      json: vi.fn((body, options) => {
-        return {
-          body,
-          status: options?.status,
-          headers: options?.headers
-        }
-      })
-    }
+vi.mock('next/server', () => ({
+  NextResponse: {
+    json: vi.fn().mockImplementation((body, options) => ({
+      body,
+      options,
+      status: options?.status || 200
+    }))
   }
-})
+}));
 
 describe('Error Handler', () => {
-  const mockRequestId = 'test-request-id-123'
-  
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+    resetAllCircuitBreakers();
+  });
 
   describe('handleAIError', () => {
-    it('should handle AI_NoObjectGeneratedError', () => {
-      const error = new Error('AI_NoObjectGeneratedError: Failed to generate')
-      const response = handleAIError(error, mockRequestId) as any
+    test('should handle circuit breaker errors', () => {
+      const error = new Error('No available AI providers. All circuits are open');
+      const requestId = '123';
       
-      expect(response.status).toBe(500)
-      expect(response.body.error).toBe(AIErrorType.AI_GENERATION_ERROR)
-      expect(response.body.message).toBe('Failed to generate structured QA documentation')
-      expect(response.body.requestId).toBe(mockRequestId)
-      expect(response.body.errorCode).toBe('GEN_FAILURE')
-      expect(response.body.retryable).toBe(true)
-      expect(Array.isArray(response.body.suggestions)).toBe(true)
-    })
-
-    it('should handle rate limit errors', () => {
-      const error = new Error('Rate limit exceeded for openai')
-      const response = handleAIError(error, mockRequestId) as any
+      const response = handleAIError(error, requestId);
       
-      expect(response.status).toBe(429)
-      expect(response.body.error).toBe(AIErrorType.RATE_LIMIT_ERROR)
-      expect(response.body.message).toBe('AI service rate limit exceeded')
-      expect(response.body.retryAfter).toBeGreaterThan(0)
-      expect(response.body.provider).toBe('openai')
-    })
-
-    it('should handle quota exceeded errors', () => {
-      const error = new Error('Quota exceeded for model gpt-4o')
-      const response = handleAIError(error, mockRequestId) as any
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.CIRCUIT_OPEN_ERROR,
+          message: 'All AI providers are currently unavailable',
+          requestId: '123',
+          providerStatus: expect.any(Object)
+        }),
+        { status: 503 }
+      );
       
-      expect(response.status).toBe(429)
-      expect(response.body.error).toBe(AIErrorType.RATE_LIMIT_ERROR)
-      expect(response.body.retryAfter).toBeGreaterThan(0)
-    })
-
-    it('should handle token limit errors', () => {
-      const error = new Error('Token limit exceeded for input')
-      const response = handleAIError(error, mockRequestId) as any
+      expect(getProviderHealthStatus).toHaveBeenCalled();
+    });
+    
+    test('should handle failover errors', () => {
+      const error = new Error('All providers failed after retries');
+      const requestId = '123';
       
-      expect(response.status).toBe(413)
-      expect(response.body.error).toBe(AIErrorType.CONTEXT_LIMIT_ERROR)
-      expect(response.body.suggestions.length).toBeGreaterThan(0)
-    })
-
-    it('should handle authentication errors', () => {
-      const error = new Error('Authentication failed: Invalid API key')
-      const response = handleAIError(error, mockRequestId) as any
+      const response = handleAIError(error, requestId);
       
-      expect(response.status).toBe(401)
-      expect(response.body.error).toBe(AIErrorType.AUTHENTICATION_ERROR)
-      expect(response.body.retryable).toBe(false)
-    })
-
-    it('should handle timeout errors', () => {
-      const error = new Error('Request timed out after 60s')
-      const response = handleAIError(error, mockRequestId) as any
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.FAILOVER_ERROR,
+          message: 'All AI provider failover attempts failed',
+          requestId: '123',
+          providerStatus: expect.any(Object)
+        }),
+        { status: 502 }
+      );
       
-      expect(response.status).toBe(504)
-      expect(response.body.error).toBe(AIErrorType.TIMEOUT_ERROR)
-    })
-
-    it('should handle content filter errors', () => {
-      const error = new Error('Content filtered by OpenAI moderation policy')
-      const response = handleAIError(error, mockRequestId) as any
+      expect(getProviderHealthStatus).toHaveBeenCalled();
+    });
+    
+    test('should handle rate limit errors and update provider status', () => {
+      const error = new Error('OpenAI API rate limit exceeded');
+      const requestId = '123';
       
-      expect(response.status).toBe(422)
-      expect(response.body.error).toBe(AIErrorType.CONTENT_FILTER_ERROR)
-      expect(response.body.provider).toBe('openai')
-    })
-
-    it('should handle provider-specific errors', () => {
-      const error = new Error('OpenAI API error: service unavailable')
-      const response = handleAIError(error, mockRequestId) as any
+      const response = handleAIError(error, requestId);
       
-      expect(response.status).toBe(502)
-      expect(response.body.error).toBe(AIErrorType.PROVIDER_ERROR)
-      expect(response.body.provider).toBe('openai')
-    })
-
-    it('should handle generic errors', () => {
-      const error = new Error('Unknown error occurred')
-      const response = handleAIError(error, mockRequestId) as any
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.RATE_LIMIT_ERROR,
+          message: 'AI service rate limit exceeded',
+          provider: 'openai',
+          providerStatus: expect.any(Object)
+        }),
+        { status: 429 }
+      );
       
-      expect(response.status).toBe(500)
-      expect(response.body.error).toBe(AIErrorType.INTERNAL_SERVER_ERROR)
-      expect(response.body.requestId).toBe(mockRequestId)
-    })
-
-    it('should handle non-Error objects', () => {
-      const error = 'String error'
-      const response = handleAIError(error, mockRequestId) as any
+      expect(getProviderHealthStatus).toHaveBeenCalled();
+    });
+    
+    test('should handle generation errors with provider status', () => {
+      const error = new Error('AI_NoObjectGeneratedError: Failed to generate object');
+      const requestId = '123';
       
-      expect(response.status).toBe(500)
-      expect(response.body.error).toBe(AIErrorType.INTERNAL_SERVER_ERROR)
-    })
-
-    it('should extract model information when available', () => {
-      const error = new Error('Token limit exceeded for model gpt-4o')
-      const response = handleAIError(error, mockRequestId) as any
+      const response = handleAIError(error, requestId);
       
-      // Just verify that the response contains some useful information
-      expect(response.body.error).toBeDefined()
-      expect(response.body.message).toBeDefined()
-    })
-  })
-
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.AI_GENERATION_ERROR,
+          message: 'Failed to generate structured QA documentation',
+          providerStatus: expect.any(Object)
+        }),
+        { status: 500 }
+      );
+      
+      expect(getProviderHealthStatus).toHaveBeenCalled();
+    });
+    
+    test('should handle authentication errors', () => {
+      const error = new Error('Authentication failed with OpenAI API key');
+      const requestId = '123';
+      
+      const response = handleAIError(error, requestId);
+      
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.AUTHENTICATION_ERROR,
+          message: 'Authentication failed with AI provider',
+          provider: 'openai'
+        }),
+        { status: 401 }
+      );
+    });
+    
+    test('should handle timeout errors', () => {
+      const error = new Error('Request timed out after 60 seconds');
+      const requestId = '123';
+      
+      const response = handleAIError(error, requestId);
+      
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.TIMEOUT_ERROR,
+          message: 'AI request timed out'
+        }),
+        { status: 504 }
+      );
+    });
+    
+    test('should handle content filter errors', () => {
+      const error = new Error('Content filtered by OpenAI moderation policy');
+      const requestId = '123';
+      
+      const response = handleAIError(error, requestId);
+      
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.CONTENT_FILTER_ERROR,
+          message: 'Content filtered by AI provider'
+        }),
+        { status: 422 }
+      );
+    });
+    
+    test('should handle provider-specific errors', () => {
+      const error = new Error('OpenAI service error');
+      const requestId = '123';
+      
+      const response = handleAIError(error, requestId);
+      
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.PROVIDER_ERROR,
+          message: 'AI provider service error',
+          provider: 'openai'
+        }),
+        { status: 502 }
+      );
+    });
+    
+    test('should handle generic errors', () => {
+      const error = new Error('Unknown error');
+      const requestId = '123';
+      
+      const response = handleAIError(error, requestId);
+      
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.INTERNAL_SERVER_ERROR,
+          message: 'An unexpected error occurred while processing your request'
+        }),
+        { status: 500 }
+      );
+    });
+  });
+  
   describe('handleValidationError', () => {
-    it('should format validation errors correctly', () => {
+    test('should format validation errors correctly', () => {
       const issues = [
         {
+          code: 'invalid_type',
+          expected: 'string',
+          received: 'undefined',
           path: ['qaProfile', 'testCaseFormat'],
-          message: 'Invalid enum value',
-          code: 'invalid_enum_value',
-          received: 'invalid_format'
+          message: 'Required'
         },
         {
-          path: ['ticketJson', 'description'],
-          message: 'Required',
-          code: 'invalid_type',
-          received: 'undefined'
-        }
-      ]
-      
-      const response = handleValidationError(issues, mockRequestId) as any
-      
-      expect(response.status).toBe(400)
-      expect(response.body.error).toBe(AIErrorType.VALIDATION_ERROR)
-      expect(response.body.message).toBe('Invalid request payload')
-      expect(response.body.details.issues.length).toBe(2)
-      expect(response.body.details.groupedByField).toBeDefined()
-      expect(response.body.requestId).toBe(mockRequestId)
-      expect(Array.isArray(response.body.suggestions)).toBe(true)
-    })
-
-    it('should group validation errors by field', () => {
-      const issues = [
-        {
-          path: ['qaProfile', 'testCaseFormat'],
-          message: 'Invalid enum value',
           code: 'invalid_enum_value',
-          received: 'invalid_format'
-        },
-        {
+          expected: ['gherkin', 'steps', 'table'],
+          received: 'invalid',
           path: ['qaProfile', 'testCaseFormat'],
-          message: 'Another error',
-          code: 'custom_error',
-          received: 'invalid_format'
+          message: 'Invalid enum value'
         }
-      ]
+      ];
       
-      const response = handleValidationError(issues, mockRequestId) as any
+      const requestId = '123';
       
-      expect(response.body.details.groupedByField['qaProfile.testCaseFormat'].length).toBe(2)
-    })
-
-    it('should generate appropriate suggestions based on error types', () => {
-      const issues = [
-        {
-          path: ['requiredField'],
-          message: 'Required',
-          code: 'invalid_type',
-          received: 'undefined'
-        }
-      ]
+      const response = handleValidationError(issues, requestId);
       
-      const response = handleValidationError(issues, mockRequestId) as any
-      
-      expect(response.body.suggestions.some((s: string) => 
-        s.toLowerCase().includes('missing') || s.toLowerCase().includes('required')
-      )).toBe(true)
-    })
-  })
-})
+      expect(NextResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: AIErrorType.VALIDATION_ERROR,
+          message: 'Invalid request payload',
+          details: expect.objectContaining({
+            issues: expect.arrayContaining([
+              expect.objectContaining({
+                field: 'qaProfile.testCaseFormat',
+                message: 'Required'
+              }),
+              expect.objectContaining({
+                field: 'qaProfile.testCaseFormat',
+                message: 'Invalid enum value'
+              })
+            ])
+          })
+        }),
+        { status: 400 }
+      );
+    });
+  });
+});

@@ -3,8 +3,6 @@
  * Provides utilities for managing AI uncertainty and ambiguity
  */
 
-import { NextResponse } from 'next/server'
-
 /**
  * Types of AI uncertainty
  */
@@ -298,6 +296,7 @@ export function formatTryVerifyFeedbackResponse(
 
 /**
  * Process ambiguous request with try-verify-feedback pattern
+ * Integrates with provider failover logic for resilient processing
  */
 export async function processAmbiguousRequest(
   request: any,
@@ -309,6 +308,7 @@ export async function processAmbiguousRequest(
     const assumptions = documentAssumptions(request, context)
     
     // Process the request with our best interpretation
+    // The processor function should already be using provider failover internally
     const result = await processor(request, context)
     
     // Generate clarifying questions for any ambiguities
@@ -326,12 +326,22 @@ export async function processAmbiguousRequest(
           ...(result.metadata || {}),
           assumptions,
           clarifyingQuestions,
-          processingNotes: 'Response generated with uncertainty management'
+          processingNotes: 'Response generated with uncertainty management and provider failover',
+          processingDetails: {
+            assumptionsCount: assumptions.length,
+            clarifyingQuestionsCount: clarifyingQuestions.length,
+            ambiguitiesDetected: ambiguities.length > 0
+          }
         }
       }
     }
   } catch (error) {
     console.error('Error in ambiguous request processing:', error)
+    
+    // Check if this is a provider failover error
+    const isFailoverError = error instanceof Error && 
+      (error.message.includes('All providers failed') || 
+       error.message.includes('No available AI providers'));
     
     // Generate partial results based on what we can process
     const partialResult = generatePartialResults(request, context, error instanceof Error ? error : new Error(String(error)))
@@ -339,12 +349,21 @@ export async function processAmbiguousRequest(
     // Return partial results with explanation
     return {
       partialResult,
-      error: 'Unable to fully process the request due to ambiguity or missing information',
-      suggestions: [
-        'Try providing more specific information',
-        'Check if all required fields are included',
-        'Consider breaking down complex requests into simpler ones'
-      ]
+      error: isFailoverError 
+        ? 'Unable to process the request due to AI provider issues' 
+        : 'Unable to fully process the request due to ambiguity or missing information',
+      errorType: isFailoverError ? 'PROVIDER_ERROR' : 'AMBIGUITY_ERROR',
+      suggestions: isFailoverError 
+        ? [
+            'Try again in a few moments',
+            'The system will automatically attempt to use alternative providers',
+            'Contact your administrator if this issue persists'
+          ]
+        : [
+            'Try providing more specific information',
+            'Check if all required fields are included',
+            'Consider breaking down complex requests into simpler ones'
+          ]
     }
   }
 }

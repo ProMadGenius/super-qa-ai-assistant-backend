@@ -4,6 +4,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import { getProviderHealthStatus } from './providerFailover'
 
 /**
  * Error types for AI operations
@@ -17,7 +18,9 @@ export enum AIErrorType {
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
   TIMEOUT_ERROR = 'TIMEOUT_ERROR',
   CONTEXT_LIMIT_ERROR = 'CONTEXT_LIMIT_ERROR',
-  CONTENT_FILTER_ERROR = 'CONTENT_FILTER_ERROR'
+  CONTENT_FILTER_ERROR = 'CONTENT_FILTER_ERROR',
+  CIRCUIT_OPEN_ERROR = 'CIRCUIT_OPEN_ERROR',
+  FAILOVER_ERROR = 'FAILOVER_ERROR'
 }
 
 /**
@@ -34,6 +37,7 @@ export interface ErrorResponse {
   provider?: string
   model?: string
   suggestions?: string[]
+  providerStatus?: any
 }
 
 /**
@@ -41,6 +45,51 @@ export interface ErrorResponse {
  */
 export function handleAIError(error: unknown, requestId?: string): NextResponse<ErrorResponse> {
   console.error('AI Error:', error)
+  
+  // Get current provider status for error context
+  const providerStatus = getProviderHealthStatus();
+  
+  // Handle circuit breaker errors
+  if (error instanceof Error && error.message.includes('No available AI providers. All circuits are open')) {
+    return NextResponse.json(
+      {
+        error: AIErrorType.CIRCUIT_OPEN_ERROR,
+        message: 'All AI providers are currently unavailable',
+        details: 'The circuit breaker is open for all providers due to repeated failures',
+        requestId,
+        errorCode: 'CIRCUIT_OPEN',
+        retryable: true,
+        providerStatus,
+        suggestions: [
+          'Wait for the circuit breaker to reset automatically',
+          'Contact your administrator to manually reset the circuit breaker',
+          'Try again in a few minutes'
+        ]
+      },
+      { status: 503 }
+    )
+  }
+  
+  // Handle failover errors
+  if (error instanceof Error && error.message.includes('All providers failed after retries')) {
+    return NextResponse.json(
+      {
+        error: AIErrorType.FAILOVER_ERROR,
+        message: 'All AI provider failover attempts failed',
+        details: 'The system attempted to use multiple providers but all attempts failed',
+        requestId,
+        errorCode: 'FAILOVER_FAILURE',
+        retryable: true,
+        providerStatus,
+        suggestions: [
+          'Try again with a simpler request',
+          'Check if your API keys are configured correctly',
+          'Wait a few minutes and try again'
+        ]
+      },
+      { status: 502 }
+    )
+  }
   
   // Handle specific AI SDK errors
   if (error instanceof Error) {
@@ -57,6 +106,7 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
           retryable: true,
           provider: extractProviderFromError(error),
           model: extractModelFromError(error),
+          providerStatus,
           suggestions: [
             'Try simplifying the request',
             'Check if the input data is properly formatted',
@@ -70,6 +120,22 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
     // Handle rate limiting errors
     if (error.message.toLowerCase().includes('rate limit') || 
         error.message.toLowerCase().includes('quota')) {
+      const provider = extractProviderFromError(error);
+      
+      // If we know which provider had the rate limit, record the failure
+      if (provider) {
+        // This will help the circuit breaker track failures
+        try {
+          const providerStatus = getProviderHealthStatus();
+          if (providerStatus[provider]) {
+            providerStatus[provider].failureCount++;
+            providerStatus[provider].lastFailure = new Date();
+          }
+        } catch (e) {
+          console.error('Failed to update provider status:', e);
+        }
+      }
+      
       return NextResponse.json(
         {
           error: AIErrorType.RATE_LIMIT_ERROR,
@@ -79,10 +145,12 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
           requestId,
           errorCode: 'RATE_LIMIT',
           retryable: true,
-          provider: extractProviderFromError(error),
+          provider,
+          providerStatus: getProviderHealthStatus(),
           suggestions: [
             'Wait for the suggested retry period',
             'Try reducing the complexity of your request',
+            'The system will automatically try an alternative provider if available',
             'Contact your administrator if this persists'
           ]
         },

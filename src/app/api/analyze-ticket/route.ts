@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateObject } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { generateObjectWithFailover } from '@/lib/ai/providerFailover'
+import type { GenerateObjectResult } from 'ai'
 import { 
   validateTicketAnalysisPayload,
   type TicketAnalysisPayload 
@@ -170,14 +170,18 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
     const startTime = Date.now()
     
     try {
-      const { object: generatedDocument } = await generateObject({
-        model: openai('gpt-4o'),
-        schema: qaCanvasDocumentSchema,
-        system: enhancedSystemPrompt,
-        prompt: analysisPrompt,
-        temperature: 0.3, // Lower temperature for more consistent, structured output
-      })
-
+      // Use provider failover logic for more resilient AI processing
+      const result = await generateObjectWithFailover<GenerateObjectResult<any>>(
+        qaCanvasDocumentSchema,
+        analysisPrompt,
+        {
+          system: enhancedSystemPrompt,
+          temperature: 0.3, // Lower temperature for more consistent, structured output
+          maxTokens: 4000
+        }
+      )
+      
+      const generatedDocument = result.object
       const generationTime = Date.now() - startTime
 
       // Enhance the generated document with metadata
@@ -199,7 +203,8 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
 
       // Return the generated QA documentation
       return NextResponse.json(enhancedDocument, { status: 200 })
-    } catch (generationError) {
+    } catch (error) {
+      const generationError = error;
       console.error('Error generating complete document, attempting partial generation:', generationError)
       
       // Attempt to generate partial results
