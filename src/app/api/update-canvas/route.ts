@@ -90,13 +90,19 @@ export async function POST(request: NextRequest) {
     const systemPrompt = buildContextAwarePrompt(sanitizedMessages, context, conversationIntent)
 
     // Transform messages for AI processing
-    const modelMessages = transformMessagesForAI(sanitizedMessages, context)
+    // Note: As of AI SDK v5, we don't need to use convertToCoreMessages anymore
+    // as the SDK automatically converts messages to the CoreMessage format
+    const modelMessages = sanitizedMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      createdAt: typeof msg.createdAt === 'string' ? new Date(msg.createdAt) : msg.createdAt
+    }))
 
     // Stream the AI response for real-time updates
     const result = await streamText({
       model: openai('gpt-4o'),
       system: systemPrompt,
-      messages: modelMessages.slice(1), // Remove system message as it's passed separately
+      messages: modelMessages, // Use the transformed messages directly
       temperature: 0.3,
       maxTokens: 4000,
     })

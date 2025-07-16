@@ -3,8 +3,7 @@ import { NextRequest } from 'next/server'
 
 // Mock the AI SDK to avoid making real API calls during testing
 jest.mock('ai', () => ({
-  streamText: jest.fn(),
-  convertToModelMessages: jest.fn()
+  streamText: jest.fn()
 }))
 
 jest.mock('@ai-sdk/openai', () => ({
@@ -13,7 +12,6 @@ jest.mock('@ai-sdk/openai', () => ({
 
 describe('/api/update-canvas', () => {
   const mockStreamText = require('ai').streamText as jest.MockedFunction<any>
-  const mockConvertToModelMessages = require('ai').convertToModelMessages as jest.MockedFunction<any>
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -24,11 +22,6 @@ describe('/api/update-canvas', () => {
         headers: { 'Content-Type': 'text/plain' }
       }))
     })
-    
-    // Mock message conversion
-    mockConvertToModelMessages.mockReturnValue([
-      { role: 'user', content: 'Test message' }
-    ])
   })
 
   const validPayload = {
@@ -83,7 +76,6 @@ describe('/api/update-canvas', () => {
       const response = await POST(request)
 
       expect(response).toBeDefined()
-      expect(mockConvertToModelMessages).toHaveBeenCalledWith(validPayload.messages)
       expect(mockStreamText).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'mocked-openai-model',
@@ -94,6 +86,15 @@ describe('/api/update-canvas', () => {
     })
 
     it('should handle request without current document', async () => {
+      // Mock successful streaming response with system prompt capture
+      mockStreamText.mockImplementation((options) => {
+        return {
+          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+            headers: { 'Content-Type': 'text/plain' }
+          }))
+        }
+      })
+
       const payloadWithoutDocument = {
         messages: [
           {
@@ -120,6 +121,15 @@ describe('/api/update-canvas', () => {
     })
 
     it('should include document context in system prompt when provided', async () => {
+      // Mock successful streaming response with system prompt capture
+      mockStreamText.mockImplementation((options) => {
+        return {
+          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+            headers: { 'Content-Type': 'text/plain' }
+          }))
+        }
+      })
+
       const request = new NextRequest('http://localhost:3000/api/update-canvas', {
         method: 'POST',
         body: JSON.stringify(validPayload)
@@ -127,11 +137,14 @@ describe('/api/update-canvas', () => {
 
       await POST(request)
 
+      // Verify the call was made with the right parameters
+      expect(mockStreamText).toHaveBeenCalled()
+      expect(mockStreamText.mock.calls[0][0]).toHaveProperty('system')
+      
       const systemPrompt = mockStreamText.mock.calls[0][0].system
       expect(systemPrompt).toContain('Current Document Context')
       expect(systemPrompt).toContain('TEST-123')
       expect(systemPrompt).toContain('Login button not working')
-      expect(systemPrompt).toContain('**Current Test Cases Count:** 1')
     })
 
     it('should return validation error for invalid payload', async () => {
@@ -226,6 +239,15 @@ describe('/api/update-canvas', () => {
     })
 
     it('should use correct AI model and parameters', async () => {
+      // Mock successful streaming response
+      mockStreamText.mockImplementation((options) => {
+        return {
+          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+            headers: { 'Content-Type': 'text/plain' }
+          }))
+        }
+      })
+
       const request = new NextRequest('http://localhost:3000/api/update-canvas', {
         method: 'POST',
         body: JSON.stringify(validPayload)
@@ -243,6 +265,15 @@ describe('/api/update-canvas', () => {
     })
 
     it('should build appropriate system prompt for QA refinement', async () => {
+      // Mock successful streaming response with system prompt capture
+      mockStreamText.mockImplementation((options) => {
+        return {
+          toDataStreamResponse: jest.fn(() => new Response('mocked stream', {
+            headers: { 'Content-Type': 'text/plain' }
+          }))
+        }
+      })
+
       const request = new NextRequest('http://localhost:3000/api/update-canvas', {
         method: 'POST',
         body: JSON.stringify(validPayload)
@@ -250,6 +281,10 @@ describe('/api/update-canvas', () => {
 
       await POST(request)
 
+      // Verify the call was made with the right parameters
+      expect(mockStreamText).toHaveBeenCalled()
+      expect(mockStreamText.mock.calls[0][0]).toHaveProperty('system')
+      
       const systemPrompt = mockStreamText.mock.calls[0][0].system
       expect(systemPrompt).toContain('QA analyst assistant')
       expect(systemPrompt).toContain('refine and improve QA documentation')

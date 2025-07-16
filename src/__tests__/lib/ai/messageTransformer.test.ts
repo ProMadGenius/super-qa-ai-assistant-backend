@@ -11,12 +11,8 @@ import {
 import { QACanvasDocument } from '@/lib/schemas/QACanvasDocument'
 import { defaultQAProfile } from '@/lib/schemas/QAProfile'
 
-// Mock the AI SDK
-jest.mock('ai', () => ({
-  convertToModelMessages: jest.fn((messages) => 
-    messages.map((msg: any) => ({ role: msg.role, content: msg.content }))
-  )
-}))
+// No need to mock the AI SDK for convertToCoreMessages anymore
+// as we've removed the dependency on it
 
 describe('Message Transformer', () => {
   const mockMessages: UIMessage[] = [

@@ -77,7 +77,7 @@ describe('/api/generate-suggestions', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    
+
     // Mock successful suggestion generation
     mockGenerateText.mockResolvedValue({
       text: 'Generated suggestion',
@@ -136,7 +136,7 @@ describe('/api/generate-suggestions', () => {
       const responseData = await response.json()
 
       expect(response.status).toBe(200)
-      
+
       const suggestion = responseData.suggestions[0]
       expect(suggestion.id).toBeDefined()
       expect(suggestion.suggestionType).toBe('edge_case')
@@ -201,7 +201,7 @@ describe('/api/generate-suggestions', () => {
       const response = await POST(request)
 
       expect(response.status).toBe(400)
-      
+
       const responseData = await response.json()
       expect(responseData.error).toBe('VALIDATION_ERROR')
       expect(responseData.message).toContain('Invalid request payload')
@@ -218,7 +218,7 @@ describe('/api/generate-suggestions', () => {
       const response = await POST(request)
 
       expect(response.status).toBe(500)
-      
+
       const responseData = await response.json()
       expect(responseData.error).toBe('AI_GENERATION_ERROR')
     })
@@ -281,7 +281,7 @@ describe('/api/generate-suggestions', () => {
       const response = await POST(request)
 
       expect(response.status).toBe(500)
-      
+
       const responseData = await response.json()
       expect(responseData.error).toBe('AI_GENERATION_ERROR')
       expect(responseData.message).toContain('Failed to generate any suggestions')
@@ -316,11 +316,11 @@ describe('/api/generate-suggestions', () => {
       await POST(request)
 
       expect(mockGenerateText).toHaveBeenCalledTimes(2)
-      
+
       // Check that each call has unique prompt content
       const firstCall = mockGenerateText.mock.calls[0][0]
       const secondCall = mockGenerateText.mock.calls[1][0]
-      
+
       expect(firstCall.prompt).toContain('suggestion 1 of 2')
       expect(secondCall.prompt).toContain('suggestion 2 of 2')
     })

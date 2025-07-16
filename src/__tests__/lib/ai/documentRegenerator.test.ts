@@ -137,7 +137,7 @@ describe('Document Regenerator', () => {
       {
         format: 'gherkin',
         id: 'tc-2',
-        category: 'negative',
+        category: 'functional',
         priority: 'high',
         testCase: {
           scenario: 'Login fails due to network error',
@@ -333,7 +333,7 @@ describe('Document Regenerator', () => {
           {
             format: 'gherkin' as const,
             id: 'tc-2',
-            category: 'negative',
+            category: 'functional',
             priority: 'medium' as const,
             testCase: {
               scenario: 'New test scenario',
