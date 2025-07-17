@@ -14,7 +14,7 @@ const handlers = [
       id: 'mock-completion-id',
       object: 'chat.completion',
       created: Date.now(),
-      model: 'gpt-4o',
+      model: 'o4-mini',
       choices: [
         {
           message: {
@@ -32,7 +32,7 @@ const handlers = [
       }
     });
   }),
-  
+
   // Mock Anthropic API
   http.post('https://api.anthropic.com/v1/messages', () => {
     return HttpResponse.json({
@@ -45,7 +45,7 @@ const handlers = [
           text: 'This is a mock response from Anthropic'
         }
       ],
-      model: 'claude-3-opus-20240229',
+      model: 'claude-3-5-haiku-20241022',
       stop_reason: 'end_turn',
       usage: {
         input_tokens: 100,
@@ -53,12 +53,12 @@ const handlers = [
       }
     });
   }),
-  
+
   // Mock streaming responses
   http.post('https://api.openai.com/v1/chat/completions', ({ request }) => {
     const url = new URL(request.url);
     const isStreaming = url.searchParams.get('stream') === 'true';
-    
+
     if (isStreaming) {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
@@ -74,7 +74,7 @@ const handlers = [
           controller.close();
         }
       });
-      
+
       return new HttpResponse(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
@@ -83,7 +83,7 @@ const handlers = [
         }
       });
     }
-    
+
     return HttpResponse.json({
       error: 'Streaming not enabled'
     }, { status: 400 });
@@ -107,15 +107,14 @@ afterAll(() => server.close());
 
 // Mock environment variables
 vi.mock('process', async () => {
-  const actual = await vi.importActual('process');
+  const actual = await vi.importActual('process') as any;
   return {
     ...actual,
     env: {
       ...actual.env,
       OPENAI_API_KEY: 'test-openai-key',
       ANTHROPIC_API_KEY: 'test-anthropic-key',
-      OPENAI_MODEL: 'gpt-4o',
-      ANTHROPIC_MODEL: 'claude-3-opus-20240229',
+      AI_MODEL: 'o4-mini',
       CIRCUIT_BREAKER_THRESHOLD: '3',
       CIRCUIT_BREAKER_RESET_TIMEOUT: '1000',
       MAX_RETRIES: '2',

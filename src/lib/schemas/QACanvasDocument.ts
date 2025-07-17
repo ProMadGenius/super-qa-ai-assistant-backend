@@ -20,7 +20,7 @@ export const configurationWarningSchema = z.object({
   title: z.string().describe('Warning title for display'),
   message: z.string().describe('Detailed warning message explaining the issue'),
   recommendation: z.string().describe('Specific recommendation to resolve the warning'),
-  severity: z.enum(['high', 'medium', 'low']).default('medium').describe('Warning severity level')
+  severity: z.enum(['high', 'medium', 'low']).describe('Warning severity level - always specify one of: high, medium, low')
 })
 
 /**
@@ -30,9 +30,9 @@ export const acceptanceCriterionSchema = z.object({
   id: z.string().describe('Unique identifier for the criterion'),
   title: z.string().describe('Brief title describing the criterion'),
   description: z.string().describe('Detailed description of what must be satisfied'),
-  priority: z.enum(['must', 'should', 'could']).default('must').describe('MoSCoW priority level'),
+  priority: z.enum(['must', 'should', 'could']).describe('MoSCoW priority level - always specify one of: must, should, could'),
   category: z.enum(['functional', 'ui', 'ux', 'performance', 'security', 'accessibility', 'api', 'database', 'negative', 'mobile']).describe('Category of the acceptance criterion'),
-  testable: z.boolean().default(true).describe('Whether this criterion can be directly tested')
+  testable: z.boolean().describe('Whether this criterion can be directly tested - always specify true or false')
 })
 
 /**
@@ -42,7 +42,7 @@ export const testStepSchema = z.object({
   stepNumber: z.number().describe('Sequential step number'),
   action: z.string().describe('Action to perform'),
   expectedResult: z.string().describe('Expected outcome of the action'),
-  notes: z.string().optional().describe('Additional notes or context for the step')
+  notes: z.string().describe('Additional notes or context for the step - use empty string if no notes')
 })
 
 /**
@@ -53,7 +53,7 @@ export const gherkinTestCaseSchema = z.object({
   given: z.array(z.string()).describe('Given conditions (preconditions)'),
   when: z.array(z.string()).describe('When actions (actions taken)'),
   then: z.array(z.string()).describe('Then assertions (expected outcomes)'),
-  tags: z.array(z.string()).default([]).describe('Tags for categorization (@smoke, @regression, etc.)')
+  tags: z.array(z.string()).describe('Tags for categorization (@smoke, @regression, etc.) - use empty array if no tags')
 })
 
 /**
@@ -62,9 +62,9 @@ export const gherkinTestCaseSchema = z.object({
 export const stepsTestCaseSchema = z.object({
   title: z.string().describe('Test case title'),
   objective: z.string().describe('What this test case aims to verify'),
-  preconditions: z.array(z.string()).default([]).describe('Prerequisites before executing the test'),
+  preconditions: z.array(z.string()).describe('Prerequisites before executing the test - use empty array if no preconditions'),
   steps: z.array(testStepSchema).describe('Sequential test steps'),
-  postconditions: z.array(z.string()).default([]).describe('Cleanup or verification after test completion')
+  postconditions: z.array(z.string()).describe('Cleanup or verification after test completion - use empty array if no postconditions')
 })
 
 /**
@@ -75,7 +75,7 @@ export const tableTestCaseSchema = z.object({
   description: z.string().describe('Brief description of what is being tested'),
   testData: z.array(z.record(z.string(), z.string())).describe('Array of test data rows with key-value pairs'),
   expectedOutcome: z.string().describe('Overall expected outcome for the test case'),
-  notes: z.string().optional().describe('Additional notes about the test case')
+  notes: z.string().describe('Additional notes about the test case - use empty string if no notes')
 })
 
 /**
@@ -116,7 +116,7 @@ export const documentMetadataSchema = z.object({
   qaProfile: qaProfileSchema.describe('QA profile used for generation'),
   ticketId: z.string().describe('Jira ticket ID/key'),
   documentVersion: z.string().default('1.0').describe('Document version for tracking changes'),
-  aiModel: z.string().optional().describe('AI model used for generation (e.g., "gpt-4o")'),
+  aiModel: z.string().optional().describe('AI model used for generation (e.g., "o4-mini")'),
   generationTime: z.number().optional().describe('Time taken to generate document in milliseconds'),
   wordCount: z.number().optional().describe('Approximate word count of generated content'),
   previousVersion: z.string().optional().describe('Previous document version (for regenerated documents)'),

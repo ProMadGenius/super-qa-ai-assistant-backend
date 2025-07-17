@@ -1,0 +1,136 @@
+{
+  "ticketSummary": {
+    "problem": "ACH payment files were imported twice, causing duplicate cash-on-account entries with no check details on closed invoices. Users cannot reverse or correct those payments because there is no way to reference the transaction.",
+    "solution": "Ensure that ACH payments always record and display check details when applied. Enable reversal of payments even if originally missing details. Prevent reprocessing of the same EDI file. Provide a data‐correction script to remove the erroneous cash receipt entries, reopen invoices, and allow proper reapplication.",
+    "context": "This involves the Accounts Receivable component of the Financials suite, specifically the import and application of bank (BofA) EDI files via AMTSRVPROC, the display of check details on invoices, and the reversal and data‐correction workflows for cash receipts."
+  },
+  "configurationWarnings": [],
+  "acceptanceCriteria": [
+    {
+      "id": "ac-1",
+      "title": "Display ACH check details on closed invoices",
+      "description": "When an invoice has been paid via ACH, the system must store and display complete check detail (date, amount, reference number) even after the invoice is closed.",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "ac-2",
+      "title": "Allow reversal of ACH payments missing initial details",
+      "description": "Users must be able to reverse any manually or automatically applied ACH payment, regardless of whether check detail was recorded at import time. Reversal should remove the cash‐on‐account entry and reopen the invoice.",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "ac-3",
+      "title": "Prevent duplicate EDI file processing",
+      "description": "The system must detect and block reprocessing of the same bank EDI file (by filename or file hash) to avoid duplicate cash receipts.",
+      "priority": "should",
+      "category": "functional",
+      "testable": true
+    },
+    {
+      "id": "ac-4",
+      "title": "Provide data correction script for historic errors",
+      "description": "A database script must exist to locate and delete the erroneous cash receipt and cash detail records for the specified date range, mark affected invoices as open, and allow reprocessing of the original ACH files.",
+      "priority": "should",
+      "category": "database",
+      "testable": true
+    }
+  ],
+  "testCases": [
+    {
+      "format": "gherkin",
+      "id": "tc-1",
+      "category": "functional",
+      "priority": "high",
+      "testCase": {
+        "scenario": "View check details on a closed invoice paid by ACH",
+        "given": [
+          "An invoice is paid by ACH on 2024-02-23",
+          "The invoice status is Closed"
+        ],
+        "when": [
+          "The user opens the Closed Invoice in AR > Open/Closed Items",
+          "The user selects 'Show Check Detail'"
+        ],
+        "then": [
+          "The system displays the ACH check details including date, amount, and reference",
+          "The displayed details match the original remittance data"
+        ],
+        "tags": ["@functional", "@positive", "@includeImages"]
+      }
+    },
+    {
+      "format": "gherkin",
+      "id": "tc-2",
+      "category": "negative",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Attempt to reverse an ACH payment with missing check details",
+        "given": [
+          "An invoice is marked Closed",
+          "An ACH payment was applied but no check details were recorded"
+        ],
+        "when": [
+          "The user attempts to reverse the payment from the invoice actions menu"
+        ],
+        "then": [
+          "The system allows the reversal to proceed",
+          "The cash‐on‐account entry is removed",
+          "The invoice status changes to Open"
+        ],
+        "tags": ["@negative", "@functional"]
+      }
+    },
+    {
+      "format": "gherkin",
+      "id": "tc-3",
+      "category": "database",
+      "priority": "medium",
+      "testCase": {
+        "scenario": "Execute data correction script for duplicate cash receipts",
+        "given": [
+          "Erroneous cashreceipt and cashdetail records exist for dates 2024-02-23 through 2024-02-29",
+          "Invoices 395500 and 395676 are closed without proper check details"
+        ],
+        "when": ["The developer runs the provided correction script"],
+        "then": [
+          "All cashreceipt and cashdetail records for the specified dates are deleted",
+          "Invoices 395500 and 395676 are set to Open",
+          "The system log confirms script execution and record counts"
+        ],
+        "tags": ["@database", "@negative", "@includeComments"]
+      }
+    }
+  ],
+  "metadata": {
+    "generatedAt": "2025-07-17T20:53:48.739Z",
+    "qaProfile": {
+      "qaCategories": {
+        "functional": true,
+        "ux": false,
+        "ui": false,
+        "negative": true,
+        "api": false,
+        "database": true,
+        "performance": false,
+        "security": false,
+        "mobile": false,
+        "accessibility": false
+      },
+      "testCaseFormat": "gherkin",
+      "autoRefresh": true,
+      "includeComments": true,
+      "includeImages": true,
+      "operationMode": "offline",
+      "showNotifications": true
+    },
+    "ticketId": "EN-8775",
+    "documentVersion": "1.0",
+    "aiModel": "o4-mini",
+    "generationTime": 39084,
+    "wordCount": 441
+  }
+}

@@ -12,15 +12,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.0-canary.1",
-    "@ai-sdk/openai": "^1.0.0-canary.3",
-    "ai": "^3.4.33",
+    "@ai-sdk/anthropic": "^1.0.5",
+    "@ai-sdk/openai": "^1.0.8",
+    "ai": "^4.0.12",
     "next": "^15.0.0",
     "node-fetch": "^2.7.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "uuid": "^11.1.0",
-    "zod": "^3.22.0"
+    "zod": "^3.22.0",
+    "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

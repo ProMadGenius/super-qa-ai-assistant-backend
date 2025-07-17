@@ -151,7 +151,7 @@
     },
     "ticketId": "EN-8775",
     "documentVersion": "1.0",
-    "aiModel": "gpt-4o",
+    "aiModel": "o4-mini",
     "generationTime": 12589,
     "wordCount": 383
   }

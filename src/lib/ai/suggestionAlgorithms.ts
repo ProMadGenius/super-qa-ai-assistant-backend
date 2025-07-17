@@ -907,7 +907,7 @@ export async function generateSuggestions(
     const { generateText } = await import('ai');
     const { openai } = await import('@ai-sdk/openai');
     const aiResponse = await generateText({
-      model: openai('gpt-4'),
+      model: openai(process.env.AI_MODEL || 'o4-mini'),
       prompt,
       tools: {
         qaSuggestionTool: {

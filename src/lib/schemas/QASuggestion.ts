@@ -82,12 +82,9 @@ export const qaSuggestionTool = tool({
     suggestionType: suggestionTypeSchema.describe('The category of the QA suggestion'),
     title: z.string().describe('Brief, actionable title for the suggestion'),
     description: z.string().describe('Detailed explanation of what should be done and why'),
-    targetSection: z.string().optional().describe('Specific document section this applies to'),
-    priority: suggestionPrioritySchema.default('medium').describe('How important this suggestion is'),
-    reasoning: z.string().describe('Why this suggestion is valuable for QA coverage'),
-    implementationHint: z.string().optional().describe('Practical tip on how to implement this'),
-    estimatedEffort: z.enum(['low', 'medium', 'high']).optional().describe('Effort needed to implement'),
-    tags: z.array(z.string()).default([]).describe('Relevant tags for categorization')
+    targetSection: z.string().describe('Specific document section this applies to'),
+    priority: suggestionPrioritySchema.describe('How important this suggestion is'),
+    reasoning: z.string().describe('Why this suggestion is valuable for QA coverage')
   }),
   // No execute function needed - we just want the AI to generate the parameters
 })

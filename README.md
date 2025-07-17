@@ -156,8 +156,7 @@ MAX_RETRIES=3                           # Maximum retry attempts
 RETRY_DELAY_MS=1000                     # Initial retry delay (ms)
 
 # Model Configuration
-OPENAI_MODEL=gpt-4o                     # OpenAI model to use
-ANTHROPIC_MODEL=claude-3-opus-20240229  # Anthropic model to use
+AI_MODEL=o4-mini                        # Centralized AI model configuration for all providers
 
 # Timeout Settings
 OPENAI_TIMEOUT=60000                    # OpenAI request timeout (ms)
@@ -456,7 +455,7 @@ node test-api-update-canvas.js
 ✅ ¡Respuesta exitosa!
 📋 Resumen del documento generado:
    • Ticket ID: TEST-123
-   • Modelo AI: gpt-4o
+   • Modelo AI: o4-mini
    • Tiempo de generación: 1247ms
    • Conteo de palabras: 1543
    • Criterios de aceptación: 3

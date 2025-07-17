@@ -18,8 +18,7 @@ module.exports = {
         PORT: 3000,
         OPENAI_API_KEY: 'your-openai-api-key', // Replace with actual key in production
         ANTHROPIC_API_KEY: 'your-anthropic-api-key', // Replace with actual key in production
-        OPENAI_MODEL: 'gpt-4o',
-        ANTHROPIC_MODEL: 'claude-3-opus-20240229',
+        AI_MODEL: 'o4-mini', // Centralized model configuration
         CIRCUIT_BREAKER_THRESHOLD: '5',
         CIRCUIT_BREAKER_RESET_TIMEOUT: '60000', // 1 minute
         MAX_RETRIES: '3',

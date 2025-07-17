@@ -107,8 +107,7 @@ OPENAI_API_KEY=your-openai-api-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
 
 # AI Models
-OPENAI_MODEL=gpt-4o
-ANTHROPIC_MODEL=claude-3-opus-20240229
+AI_MODEL=o4-mini  # Centralized model configuration
 
 # Circuit Breaker Configuration
 CIRCUIT_BREAKER_THRESHOLD=5

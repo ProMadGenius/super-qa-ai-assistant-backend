@@ -47,10 +47,10 @@ describe('Document Regenerator', () => {
   
   sampleDocument.testCases = [
     {
-      format: 'steps',
+      format: 'steps' as const,
       id: 'tc-1',
       category: 'functional',
-      priority: 'high',
+      priority: 'high' as const,
       testCase: {
         title: 'Reset password with special characters',
         objective: 'Verify that users can reset passwords containing special characters',
@@ -59,12 +59,14 @@ describe('Document Regenerator', () => {
           {
             stepNumber: 1,
             action: 'Navigate to password reset page',
-            expectedResult: 'Password reset page loads'
+            expectedResult: 'Password reset page loads',
+            notes: ''
           },
           {
             stepNumber: 2,
             action: 'Enter email address',
-            expectedResult: 'Email field accepts input'
+            expectedResult: 'Email field accepts input',
+            notes: ''
           }
         ],
         postconditions: ['Password is successfully reset']
@@ -149,17 +151,20 @@ describe('Document Regenerator', () => {
               {
                 stepNumber: 1,
                 action: 'Navigate to password reset page',
-                expectedResult: 'Password reset page loads'
+                expectedResult: 'Password reset page loads',
+                notes: ''
               },
               {
                 stepNumber: 2,
                 action: 'Enter email address',
-                expectedResult: 'Email field accepts input'
+                expectedResult: 'Email field accepts input',
+                notes: ''
               },
               {
                 stepNumber: 3,
                 action: 'Verify login with new password',
-                expectedResult: 'User can login successfully'
+                expectedResult: 'User can login successfully',
+                notes: ''
               }
             ],
             postconditions: ['Password is successfully reset']
@@ -297,10 +302,10 @@ describe('Document Regenerator', () => {
       ],
       testCases: [
         {
-          format: 'steps',
+          format: 'steps' as const,
           id: 'tc-1', // Same ID as original
           category: 'functional',
-          priority: 'high',
+          priority: 'high' as const,
           testCase: {
             title: 'Updated test case title',
             objective: 'Updated objective for testing ID preservation',
@@ -309,7 +314,8 @@ describe('Document Regenerator', () => {
               {
                 stepNumber: 1,
                 action: 'Updated action',
-                expectedResult: 'Updated result'
+                expectedResult: 'Updated result',
+                notes: ''
               }
             ],
             postconditions: ['Updated postcondition']
@@ -392,10 +398,10 @@ describe('Document Regenerator', () => {
       ],
       testCases: [
         {
-          format: 'steps',
+          format: 'steps' as const,
           id: 'tc-new-1', // Different ID than original
           category: 'functional',
-          priority: 'medium',
+          priority: 'medium' as const,
           testCase: {
             title: 'New test case title',
             objective: 'New objective for testing ID generation',
@@ -404,7 +410,8 @@ describe('Document Regenerator', () => {
               {
                 stepNumber: 1,
                 action: 'New action',
-                expectedResult: 'New result'
+                expectedResult: 'New result',
+                notes: ''
               }
             ],
             postconditions: ['New postcondition']

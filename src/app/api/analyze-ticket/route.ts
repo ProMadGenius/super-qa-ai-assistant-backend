@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateObjectWithFailover } from '@/lib/ai/providerFailover'
-import type { GenerateObjectResult } from 'ai'
-import { 
+import { generateQADocumentWithFailover } from '@/lib/ai/providerFailover'
+import {
   validateTicketAnalysisPayload,
-  type TicketAnalysisPayload 
+  type TicketAnalysisPayload
 } from '@/lib/schemas/TicketAnalysisPayload'
-import { 
+import {
   qaCanvasDocumentSchema,
-  type QACanvasDocument 
+  type QACanvasDocument
 } from '@/lib/schemas/QACanvasDocument'
 import { handleValidationError, handleAIError } from '@/lib/ai/errorHandler'
 import {
@@ -25,21 +24,21 @@ import { v4 as uuidv4 } from 'uuid'
 export async function POST(request: NextRequest) {
   // Generate a unique request ID for tracking and debugging
   const requestId = uuidv4()
-  
+
   try {
     // Parse and validate the request body
     const body = await request.json()
     const validationResult = validateTicketAnalysisPayload(body)
-    
+
     if (!validationResult.success) {
       return handleValidationError(validationResult.error.issues, requestId)
     }
 
     const { qaProfile, ticketJson }: TicketAnalysisPayload = validationResult.data
-    
+
     // Document any assumptions we need to make based on the input data
     const assumptions = []
-    
+
     // Check for potential configuration issues
     if (!qaProfile.testCaseFormat) {
       assumptions.push({
@@ -50,7 +49,7 @@ export async function POST(request: NextRequest) {
         impact: 'medium'
       })
     }
-    
+
     // Check for minimal ticket information
     if (!ticketJson.description || ticketJson.description.trim().length < 50) {
       assumptions.push({
@@ -60,12 +59,12 @@ export async function POST(request: NextRequest) {
         impact: 'high'
       })
     }
-    
+
     // Check for potential conflicts in QA categories
     const activeCategories = Object.entries(qaProfile.qaCategories)
       .filter(([_, active]) => active)
       .map(([category]) => category)
-    
+
     if (activeCategories.includes('api') && !ticketJson.description.toLowerCase().includes('api')) {
       assumptions.push({
         type: UncertaintyType.CONFLICTING_REQUIREMENTS,
@@ -112,16 +111,16 @@ ${ticketJson.components.length > 0 ? ticketJson.components.join(', ') : 'None sp
 ${Object.entries(ticketJson.customFields).map(([key, value]) => `- ${key}: ${value}`).join('\n')}
 
 **COMMENTS (${ticketJson.comments.length} total):**
-${ticketJson.comments.map((comment, index) => 
-  `${index + 1}. ${comment.author} (${comment.date}): ${comment.body.substring(0, 200)}${comment.body.length > 200 ? '...' : ''}`
-).join('\n')}
+${ticketJson.comments.map((comment, index) =>
+      `${index + 1}. ${comment.author} (${comment.date}): ${comment.body.substring(0, 200)}${comment.body.length > 200 ? '...' : ''}`
+    ).join('\n')}
 
 **QA PROFILE SETTINGS:**
 - Test Case Format: ${qaProfile.testCaseFormat}
 - Active Categories: ${Object.entries(qaProfile.qaCategories)
-  .filter(([_, active]) => active)
-  .map(([category]) => category)
-  .join(', ')}
+        .filter(([_, active]) => active)
+        .map(([category]) => category)
+        .join(', ')}
 - Include Comments: ${qaProfile.includeComments}
 - Include Images: ${qaProfile.includeImages}
 
@@ -131,9 +130,9 @@ ${ticketJson.comments.map((comment, index) =>
 3. Generate detailed acceptance criteria based on the ticket content
 4. Create comprehensive test cases in the specified format (${qaProfile.testCaseFormat})
 5. Focus on the active QA categories: ${Object.entries(qaProfile.qaCategories)
-  .filter(([_, active]) => active)
-  .map(([category]) => category)
-  .join(', ')}
+        .filter(([_, active]) => active)
+        .map(([category]) => category)
+        .join(', ')}
 
 Generate a complete QACanvasDocument with all sections properly filled out.`
 
@@ -168,34 +167,56 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
 
     // Generate structured QA documentation using AI
     const startTime = Date.now()
-    
+
     try {
-      // Use provider failover logic for more resilient AI processing
-      const result = await generateObjectWithFailover<GenerateObjectResult<any>>(
+      // Debug: Log the schema being sent to AI providers
+      console.log('Schema being sent to AI providers:')
+      console.log(JSON.stringify(qaCanvasDocumentSchema, null, 2))
+
+      // Use the new generateQADocumentWithFailover function
+      const generatedDocument = await generateQADocumentWithFailover<QACanvasDocument>(
         qaCanvasDocumentSchema,
         analysisPrompt,
         {
-          system: enhancedSystemPrompt,
-          temperature: 0.3, // Lower temperature for more consistent, structured output
+          temperature: 0.1,
           maxTokens: 4000
         }
-      )
-      
-      const generatedDocument = result.object
+      );
       const generationTime = Date.now() - startTime
+
+      // Debug: Log the generated document structure
+      console.log('Generated document structure:', JSON.stringify(generatedDocument, null, 2))
+      console.log('Generated document keys:', Object.keys(generatedDocument || {}))
+
+      // Check if the document has the expected structure
+      if (!generatedDocument) {
+        console.error('Generated document is null or undefined')
+        throw new Error('AI failed to generate document')
+      }
+
+      if (!generatedDocument.ticketSummary) {
+        console.error('Generated document missing ticketSummary')
+      }
+
+      if (!generatedDocument.acceptanceCriteria) {
+        console.error('Generated document missing acceptanceCriteria')
+      }
+
+      if (!generatedDocument.testCases) {
+        console.error('Generated document missing testCases')
+      }
 
       // Enhance the generated document with metadata
       const enhancedDocument: QACanvasDocument = {
         ...generatedDocument,
         metadata: {
-          ...(generatedDocument.metadata || {}),
           generatedAt: new Date().toISOString(),
           qaProfile,
           ticketId: ticketJson.issueKey,
           documentVersion: '1.0',
-          aiModel: 'gpt-4o',
+          aiModel: process.env.AI_MODEL || 'o4-mini', // Usar la variable de entorno centralizada
           generationTime,
-          wordCount: estimateWordCount(generatedDocument),
+          wordCount: generatedDocument ? estimateWordCount(generatedDocument) : 0,
           // Store assumptions in regenerationReason if there are any
           regenerationReason: assumptions.length > 0 ? `Generated with ${assumptions.length} assumptions` : undefined
         }
@@ -220,24 +241,24 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
  */
 function estimateWordCount(document: QACanvasDocument): number {
   let wordCount = 0
-  
+
   // Count words in ticket summary
   wordCount += countWords(document.ticketSummary.problem)
   wordCount += countWords(document.ticketSummary.solution)
   wordCount += countWords(document.ticketSummary.context)
-  
+
   // Count words in configuration warnings
   document.configurationWarnings.forEach(warning => {
     wordCount += countWords(warning.message)
     wordCount += countWords(warning.recommendation)
   })
-  
+
   // Count words in acceptance criteria
   document.acceptanceCriteria.forEach(criterion => {
     wordCount += countWords(criterion.title)
     wordCount += countWords(criterion.description)
   })
-  
+
   // Count words in test cases
   document.testCases.forEach(testCase => {
     if (testCase.format === 'gherkin') {
@@ -258,7 +279,7 @@ function estimateWordCount(document: QACanvasDocument): number {
       wordCount += countWords(testCase.testCase.expectedOutcome)
     }
   })
-  
+
   return wordCount
 }
 

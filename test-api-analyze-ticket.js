@@ -72,13 +72,15 @@ const testData = {
   }
 };
 
+const API_URL = 'http://localhost:3000/api/analyze-ticket';
+
 async function testAnalyzeTicket() {
   console.log('🚀 Probando endpoint /api/analyze-ticket...\n');
   
   try {
     const startTime = Date.now();
     
-    const response = await fetch('http://localhost:3000/api/analyze-ticket', {
+    const response = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -150,7 +152,7 @@ async function testAnalyzeTicket() {
     console.log('💾 Documento completo guardado en: analyze-result.json');
     
     // Guardar el resultado completo en un archivo
-    const fs = require('fs');
+    const fs = await import('fs');
     fs.writeFileSync('analyze-result.json', JSON.stringify(result, null, 2));
     
   } catch (error) {

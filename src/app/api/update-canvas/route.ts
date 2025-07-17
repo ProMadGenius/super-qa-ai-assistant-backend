@@ -142,10 +142,15 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
     }
 
     // Stream the AI response for real-time updates with failover
-    const result = await streamTextWithFailover(
+    // Convert messages to a single prompt format since streamTextWithFailover expects a prompt
+    const conversationPrompt = [
       enhancedSystemPrompt,
+      ...modelMessages.map(msg => `${msg.role}: ${msg.content}`)
+    ].join('\n\n')
+
+    const result = await streamTextWithFailover(
+      conversationPrompt,
       {
-        messages: modelMessages, // Use the transformed messages directly
         temperature: 0.3,
         maxTokens: 4000,
       }

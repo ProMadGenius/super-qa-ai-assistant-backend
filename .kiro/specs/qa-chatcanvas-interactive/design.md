@@ -258,7 +258,7 @@ The system strictly follows Vercel AI SDK v5 message handling patterns:
   message: "Failed to generate QA document",
   details: {
     provider: "openai",
-    model: "gpt-4o",
+    model: "${process.env.AI_MODEL || 'o4-mini'}", // Use centralized model configuration
     retryable: true
   }
 }

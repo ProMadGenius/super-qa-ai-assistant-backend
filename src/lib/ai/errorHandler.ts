@@ -409,7 +409,7 @@ function extractModelFromError(error: Error): string | undefined {
   const errorMsg = error.message;
   
   // Try to extract model names like gpt-4, gpt-3.5-turbo, claude-2, etc.
-  const modelMatches = errorMsg.match(/gpt-\d+(?:-\w+)?|claude-\d+(?:\.\d+)?|gpt-4o/i);
+  const modelMatches = errorMsg.match(/gpt-\d+(?:-\w+)?|claude-\d+(?:\.\d+)?|o4-(?:mini|preview|full)|gpt-4o(?:-mini)?/i);
   
   if (modelMatches && modelMatches[0]) {
     return modelMatches[0].toLowerCase();

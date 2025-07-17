@@ -61,7 +61,7 @@ const defaultOptions: RegenerationOptions = {
   preserveStructure: true,
   regenerationMode: 'complete',
   temperature: 0.3,
-  model: 'gpt-4o'
+  model: process.env.AI_MODEL || 'o4-mini'
 }
 
 /**
