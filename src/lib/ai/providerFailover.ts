@@ -121,21 +121,22 @@ const defaultRetryConfig: RetryConfig = {
 };
 
 // Provider configurations
-// Using centralized model configuration from environment variables
+// Using dynamic provider priority based on PRIMARY_PROVIDER environment variable
+const primaryProvider = process.env.PRIMARY_PROVIDER || 'openai';
 const providers: ProviderConfig[] = [
     {
         provider: openai,
         name: 'openai', // Explicit name for provider status tracking
-        model: process.env.AI_MODEL || 'o4-mini', // Single centralized model configuration
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
         timeout: Number(process.env.OPENAI_TIMEOUT) || 60000,
-        weight: 10 // Primary provider
+        weight: primaryProvider === 'openai' ? 10 : 5 // Dynamic weight based on PRIMARY_PROVIDER
     },
     {
         provider: anthropic,
         name: 'anthropic', // Explicit name for provider status tracking
-        model: process.env.AI_MODEL || 'claude-3-5-haiku-20241022', // Using same centralized model if possible
+        model: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
         timeout: Number(process.env.ANTHROPIC_TIMEOUT) || 60000,
-        weight: 5 // Secondary provider
+        weight: primaryProvider === 'anthropic' ? 10 : 5 // Dynamic weight based on PRIMARY_PROVIDER
     }
 ];
 
@@ -276,20 +277,21 @@ async function executeWithRetryAndFailover<T>(
         }
     }
 
-    // If failover is disabled, just use the primary provider (OpenAI)
+    // If failover is disabled, just use the primary provider
     if (disableFailover) {
-        console.log('Failover disabled. Using only primary provider (OpenAI)');
+        const primaryProviderName = process.env.PRIMARY_PROVIDER || 'openai';
+        console.log(`Failover disabled. Using only primary provider (${primaryProviderName})`);
         try {
-            const primaryProvider = providers.find(p => p.name === 'openai');
-            if (!primaryProvider) {
-                throw new Error('Primary provider (OpenAI) not found');
+            const primaryProviderConfig = providers.find(p => p.name === primaryProviderName);
+            if (!primaryProviderConfig) {
+                throw new Error(`Primary provider (${primaryProviderName}) not found`);
             }
 
-            console.log(`Using provider ${primaryProvider.name} with model ${primaryProvider.model}`);
-            const result = await operation(primaryProvider);
+            console.log(`Using provider ${primaryProviderConfig.name} with model ${primaryProviderConfig.model}`);
+            const result = await operation(primaryProviderConfig);
 
             // Record success
-            recordSuccess(primaryProvider.name);
+            recordSuccess(primaryProviderConfig.name);
 
             return result;
         } catch (error) {

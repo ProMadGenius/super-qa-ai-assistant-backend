@@ -214,7 +214,12 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
           qaProfile,
           ticketId: ticketJson.issueKey,
           documentVersion: '1.0',
-          aiModel: process.env.AI_MODEL || 'o4-mini', // Usar la variable de entorno centralizada
+          aiModel: (() => {
+            const primaryProvider = process.env.PRIMARY_PROVIDER || 'openai';
+            return primaryProvider === 'openai' 
+              ? (process.env.OPENAI_MODEL || 'gpt-4o-mini')
+              : (process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022');
+          })(), // Usar el modelo del proveedor primario actual
           generationTime,
           wordCount: generatedDocument ? estimateWordCount(generatedDocument) : 0,
           // Store assumptions in regenerationReason if there are any
