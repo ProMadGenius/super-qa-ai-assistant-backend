@@ -1,70 +1,41 @@
+/**
+ * PM2 Ecosystem Configuration
+ * Used for production deployment on Ubuntu 22.04 LTS
+ */
+
 module.exports = {
   apps: [
     {
-      name: 'qa-chatcanvas-backend',
-      script: 'server.js',
-      cwd: './.next/standalone',
-      instances: 'max',  // Use max for auto-scaling based on CPU cores
-      exec_mode: 'cluster',
-      
-      // Environment configurations
+      name: 'qa-chatcanvas-api',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start',
+      instances: 'max', // Use maximum number of CPU cores
+      exec_mode: 'cluster', // Run in cluster mode for load balancing
+      watch: false, // Disable file watching in production
+      max_memory_restart: '1G', // Restart if memory usage exceeds 1GB
       env: {
-        NODE_ENV: 'development',
-        PORT: 3000,
-        API_BASE_URL: 'http://localhost:3000'
-      },
-      env_production: {
         NODE_ENV: 'production',
         PORT: 3000,
-        API_BASE_URL: 'https://your-production-domain.com'  // Update with actual production URL
+        OPENAI_API_KEY: 'your-openai-api-key', // Replace with actual key in production
+        ANTHROPIC_API_KEY: 'your-anthropic-api-key', // Replace with actual key in production
+        OPENAI_MODEL: 'gpt-4o',
+        ANTHROPIC_MODEL: 'claude-3-opus-20240229',
+        CIRCUIT_BREAKER_THRESHOLD: '5',
+        CIRCUIT_BREAKER_RESET_TIMEOUT: '60000', // 1 minute
+        MAX_RETRIES: '3',
+        RETRY_DELAY_MS: '1000', // 1 second
+        LOG_LEVEL: 'info'
       },
-      env_staging: {
-        NODE_ENV: 'staging',
+      env_development: {
+        NODE_ENV: 'development',
+        PORT: 3000,
+        LOG_LEVEL: 'debug'
+      },
+      env_test: {
+        NODE_ENV: 'test',
         PORT: 3001,
-        API_BASE_URL: 'https://staging-domain.com'  // Update with actual staging URL
-      },
-      
-      // Restart policy
-      max_restarts: 10,
-      min_uptime: '30s',
-      max_memory_restart: '1G',
-      
-      // Logging
-      log_file: './logs/combined.log',
-      out_file: './logs/out.log',
-      error_file: './logs/error.log',
-      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-      merge_logs: true,
-      
-      // Monitoring
-      monitoring: true,
-      
-      // Advanced features
-      watch: false,
-      ignore_watch: ['node_modules', 'logs', '.git'],
-      
-      // Environment variables file
-      env_file: '.env.local',
-      
-      // Graceful shutdown
-      kill_timeout: 5000,
-      wait_ready: true,
-      listen_timeout: 10000,
-      
-      // Cron restart (optional - restart daily at 3am)
-      cron_restart: '0 3 * * *'
+        LOG_LEVEL: 'debug'
+      }
     }
-  ],
-  
-  // Deployment configuration (optional)
-  deploy: {
-    production: {
-      user: 'ubuntu',
-      host: ['your-production-server'],
-      ref: 'origin/main',
-      repo: 'git@github.com:your-username/qa-chatcanvas-backend.git',
-      path: '/var/www/qa-chatcanvas',
-      'post-deploy': 'npm ci && npm run build && pm2 reload ecosystem.config.js --env production'
-    }
-  }
-}
+  ]
+};

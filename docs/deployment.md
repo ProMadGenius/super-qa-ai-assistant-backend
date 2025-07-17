@@ -1,140 +1,142 @@
-# QA ChatCanvas Backend Deployment Guide
+# Deployment Guide
 
-This document provides instructions for deploying the QA ChatCanvas Backend API to a production environment using PM2 on Ubuntu 22.04 LTS.
+This document outlines the steps to deploy the QA ChatCanvas API to a production environment.
 
-## Prerequisites
+## System Requirements
 
-- Ubuntu 22.04 LTS server
-- Node.js 20+ installed
-- PM2 installed globally (`npm install -g pm2`)
-- Git access to the repository
-- OpenAI API key (required)
-- Anthropic API key (optional, for fallback)
+- Ubuntu 22.04 LTS
+- Node.js 20.x or higher
+- PM2 (Process Manager)
+- Nginx (for reverse proxy and SSL termination)
 
 ## Environment Setup
 
-### 1. Clone the Repository
+### Install Node.js
 
 ```bash
-git clone https://github.com/your-username/qa-chatcanvas-backend.git
-cd qa-chatcanvas-backend
+# Add Node.js repository
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+
+# Install Node.js
+sudo apt-get install -y nodejs
+
+# Verify installation
+node --version
+npm --version
 ```
 
-### 2. Install Dependencies
+### Install PM2
 
 ```bash
+# Install PM2 globally
+sudo npm install -g pm2
+
+# Verify installation
+pm2 --version
+```
+
+### Install Nginx
+
+```bash
+# Install Nginx
+sudo apt-get install -y nginx
+
+# Verify installation
+nginx -v
+
+# Enable and start Nginx
+sudo systemctl enable nginx
+sudo systemctl start nginx
+```
+
+## Application Deployment
+
+### Clone Repository
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd qa-chatcanvas-api
+```
+
+### Install Dependencies
+
+```bash
+# Install dependencies
 npm ci
 ```
 
-### 3. Configure Environment Variables
-
-Create a `.env.local` file in the project root:
+### Build Application
 
 ```bash
-cp .env.example .env.local
-nano .env.local
-```
-
-Update the following variables:
-
-```
-# OpenAI Configuration (Required)
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-4o  # Default model for OpenAI
-
-# Anthropic Configuration (Optional, for failover)
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-ANTHROPIC_MODEL=claude-3-opus-20240229  # Default model for Anthropic
-
-# Provider Failover Configuration
-CIRCUIT_BREAKER_THRESHOLD=5  # Number of failures before circuit opens
-CIRCUIT_BREAKER_RESET_TIMEOUT=60000  # Time in ms before circuit resets (1 minute)
-MAX_RETRIES=3  # Maximum retry attempts
-RETRY_DELAY_MS=1000  # Initial delay between retries in ms
-
-# Environment
-NODE_ENV=production
-
-# API Configuration
-API_BASE_URL=https://your-production-domain.com
-```
-
-### 4. Build the Application
-
-```bash
+# Build the application
 npm run build
 ```
 
-This creates a standalone build in `.next/standalone` directory that includes all dependencies.
+### Configure Environment Variables
 
-## Deployment with PM2
-
-### 1. Start the Application
+Edit the `ecosystem.config.js` file to set your API keys and other environment variables:
 
 ```bash
-pm2 start ecosystem.config.js --env production
+# Open the ecosystem config file
+nano ecosystem.config.js
+
+# Update the environment variables with your actual API keys
+# Save and exit
 ```
 
-### 2. Save PM2 Configuration
+### Start Application with PM2
 
 ```bash
+# Start the application with PM2
+pm2 start ecosystem.config.js
+
+# Save the PM2 process list
 pm2 save
-```
 
-### 3. Configure PM2 to Start on System Boot
-
-```bash
+# Set PM2 to start on system boot
 pm2 startup
 ```
 
-Follow the instructions provided by the command to complete the setup.
+## Nginx Configuration
 
-## Monitoring and Logs
-
-### View Application Status
+Create an Nginx configuration file for the application:
 
 ```bash
-pm2 status qa-chatcanvas-backend
+# Create a new Nginx configuration file
+sudo nano /etc/nginx/sites-available/qa-chatcanvas-api
+
+# Add the following configuration
 ```
-
-### View Logs
-
-```bash
-# All logs
-pm2 logs qa-chatcanvas-backend
-
-# Error logs only
-pm2 logs qa-chatcanvas-backend --err
-
-# Out logs only
-pm2 logs qa-chatcanvas-backend --out
-```
-
-### Monitor Application
-
-```bash
-pm2 monit
-```
-
-## Updating the Application
-
-```bash
-cd qa-chatcanvas-backend
-git pull
-npm ci
-npm run build
-pm2 reload ecosystem.config.js --env production
-```
-
-## Nginx Configuration (Recommended)
-
-For production deployments, it's recommended to use Nginx as a reverse proxy:
 
 ```nginx
 server {
     listen 80;
-    server_name your-production-domain.com;
+    server_name your-domain.com;
 
+    # Redirect HTTP to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    # SSL configuration
+    ssl_certificate /path/to/your/certificate.crt;
+    ssl_certificate_key /path/to/your/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Content-Type-Options "nosniff";
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload";
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self';";
+
+    # Proxy settings
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
@@ -145,56 +147,225 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeout settings for streaming responses
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
     }
+
+    # Logging
+    access_log /var/log/nginx/qa-chatcanvas-api-access.log;
+    error_log /var/log/nginx/qa-chatcanvas-api-error.log;
 }
 ```
 
-Save this to `/etc/nginx/sites-available/qa-chatcanvas` and enable it:
+Enable the configuration:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/qa-chatcanvas /etc/nginx/sites-enabled/
+# Create a symbolic link to enable the site
+sudo ln -s /etc/nginx/sites-available/qa-chatcanvas-api /etc/nginx/sites-enabled/
+
+# Test Nginx configuration
 sudo nginx -t
+
+# Reload Nginx
 sudo systemctl reload nginx
 ```
 
-## SSL Configuration with Certbot
+## SSL Certificate
+
+You can obtain an SSL certificate using Let's Encrypt:
 
 ```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d your-production-domain.com
+# Install Certbot
+sudo apt-get install -y certbot python3-certbot-nginx
+
+# Obtain and install certificate
+sudo certbot --nginx -d your-domain.com
+
+# Verify auto-renewal
+sudo certbot renew --dry-run
+```
+
+## Monitoring and Maintenance
+
+### Monitor Application
+
+```bash
+# View application logs
+pm2 logs qa-chatcanvas-api
+
+# Monitor application status
+pm2 monit
+
+# View application information
+pm2 show qa-chatcanvas-api
+```
+
+### Update Application
+
+```bash
+# Pull latest changes
+git pull
+
+# Install dependencies
+npm ci
+
+# Build application
+npm run build
+
+# Restart application
+pm2 restart qa-chatcanvas-api
+```
+
+### Backup and Restore
+
+```bash
+# Save PM2 process list
+pm2 save
+
+# Dump PM2 process list to a file
+pm2 dump
+
+# Restore PM2 process list
+pm2 resurrect
 ```
 
 ## Troubleshooting
 
-### Application Won't Start
-
-Check the error logs:
+### Check Application Status
 
 ```bash
-pm2 logs qa-chatcanvas-backend --err
+# Check if application is running
+pm2 status
+
+# Check application logs
+pm2 logs qa-chatcanvas-api
 ```
 
-### Memory Issues
-
-If the application is using too much memory, adjust the `max_memory_restart` setting in `ecosystem.config.js`.
-
-### API Provider Issues
-
-The application includes failover logic between OpenAI and Anthropic. Ensure both API keys are configured correctly in `.env.local` for this feature to work.
-
-## Environment-Specific Configurations
-
-To start the application in different environments:
+### Check Nginx Status
 
 ```bash
-# Development
-pm2 start ecosystem.config.js --env development
+# Check Nginx status
+sudo systemctl status nginx
 
-# Staging
-pm2 start ecosystem.config.js --env staging
-
-# Production
-pm2 start ecosystem.config.js --env production
+# Check Nginx error logs
+sudo tail -f /var/log/nginx/error.log
 ```
 
-Each environment uses different configuration values as defined in the `ecosystem.config.js` file.
+### Restart Services
+
+```bash
+# Restart application
+pm2 restart qa-chatcanvas-api
+
+# Restart Nginx
+sudo systemctl restart nginx
+```
+
+## Performance Tuning
+
+### Node.js Performance
+
+Adjust the following settings in `ecosystem.config.js`:
+
+- `instances`: Set to the number of CPU cores or `max` for automatic scaling
+- `max_memory_restart`: Adjust based on available system memory
+- Add `node_args: "--max-old-space-size=4096"` to increase memory limit if needed
+
+### Nginx Performance
+
+Adjust the following settings in the Nginx configuration:
+
+```nginx
+# Worker processes and connections
+worker_processes auto;
+events {
+    worker_connections 1024;
+    multi_accept on;
+}
+
+# Buffers and timeouts
+http {
+    client_body_buffer_size 10K;
+    client_header_buffer_size 1k;
+    client_max_body_size 8m;
+    large_client_header_buffers 2 1k;
+
+    client_body_timeout 12;
+    client_header_timeout 12;
+    keepalive_timeout 15;
+    send_timeout 10;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 256;
+    gzip_proxied any;
+    gzip_vary on;
+    gzip_types
+        application/javascript
+        application/json
+        application/x-javascript
+        text/css
+        text/javascript
+        text/plain;
+}
+```
+
+## Security Considerations
+
+1. **API Keys**: Store API keys securely and rotate them regularly
+2. **Rate Limiting**: Implement rate limiting to prevent abuse
+3. **Firewall**: Configure UFW or iptables to restrict access
+4. **Regular Updates**: Keep all software updated with security patches
+5. **Monitoring**: Set up monitoring for unusual activity
+6. **Backups**: Regularly backup configuration files
+
+## Automated Deployment
+
+For automated deployments, consider setting up a CI/CD pipeline using GitHub Actions or similar tools.
+
+Example GitHub Actions workflow:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /path/to/app
+            git pull
+            npm ci
+            npm run build
+            pm2 restart qa-chatcanvas-api
+```
+
+## Conclusion
+
+This deployment guide provides a comprehensive approach to deploying the QA ChatCanvas API in a production environment. Follow these steps to ensure a secure, performant, and reliable deployment.

@@ -1,10 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['ai']
-  },
+  serverExternalPackages: ['ai'],
   // Enable standalone build for PM2 deployment
   output: 'standalone'
 }
 
-module.exports = nextConfig
+export default nextConfig

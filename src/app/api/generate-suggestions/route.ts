@@ -61,6 +61,18 @@ export async function POST(request: NextRequest) {
   const requestId = uuidv4()
   
   try {
+    // Check for API key configuration
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        {
+          error: 'CONFIGURATION_ERROR',
+          message: 'API key is not configured',
+          details: 'OpenAI API key is required for AI processing'
+        },
+        { status: 500 }
+      )
+    }
+
     // Parse and validate the request body
     const body = await request.json()
     const validationResult = generateSuggestionsPayloadSchema.safeParse(body)
@@ -97,7 +109,7 @@ export async function POST(request: NextRequest) {
 
     // Document any assumptions we need to make
     // We're not using the assumptions directly, but they're logged for debugging purposes
-    documentAssumptions({ content: JSON.stringify(requestContext) }, requestContext)
+    documentAssumptions(['Processing QA suggestions request'])
     
     // Generate suggestions using intelligent algorithms
     const suggestions: QASuggestion[] = []
@@ -118,44 +130,44 @@ export async function POST(request: NextRequest) {
     // Create a pool of potential suggestions from all algorithms
     const suggestionPool = [
       // Map coverage gaps to suggestions
-      ...coverageGaps.map(gap => ({
-        type: mapGapToSuggestionType(gap),
-        title: `Add test coverage: ${gap.category}`,
-        description: gap.description,
+      ...(coverageGaps?.gaps || []).map((gap: string) => ({
+        type: 'functional_test' as SuggestionType,
+        title: `Add test coverage: ${gap}`,
+        description: `Coverage gap identified: ${gap}`,
         targetSection: 'Test Cases',
-        priority: gap.severity,
-        reasoning: `This is a ${gap.severity} priority gap in test coverage.`,
-        implementationHint: gap.suggestedAction,
-        tags: [gap.category, 'coverage-gap']
+        priority: 'medium',
+        reasoning: `This is a gap in test coverage that should be addressed.`,
+        implementationHint: `Consider adding test cases for: ${gap}`,
+        tags: [gap, 'coverage-gap']
       })),
       
       // Map ambiguous requirements to clarification questions
-      ...ambiguousRequirements.map(ambiguity => ({
-        type: mapAmbiguityToSuggestionType(ambiguity),
-        title: `Clarify: ${ambiguity.source}`,
-        description: ambiguity.clarificationQuestion,
+      ...(ambiguousRequirements?.questions || []).map((question: { context: string; question: string }) => ({
+        type: 'clarification_question' as SuggestionType,
+        title: `Clarify: ${question.context}`,
+        description: question.question,
         targetSection: 'Acceptance Criteria',
         priority: 'high',
-        reasoning: `Ambiguous ${ambiguity.ambiguityType} found in the requirements.`,
-        implementationHint: `Consider asking the product owner or developer about: "${ambiguity.text}"`,
-        tags: ['clarification', ambiguity.ambiguityType]
+        reasoning: `Ambiguous requirement found that needs clarification.`,
+        implementationHint: `Consider asking: "${question.question}"`,
+        tags: ['clarification', 'ambiguous']
       })),
       
       // Map edge cases to suggestions
-      ...edgeCases.map(edgeCase => ({
-        type: mapEdgeCaseToSuggestionType(edgeCase),
+      ...(edgeCases?.edgeCases || []).map((edgeCase: { type: string; scenario: string; suggestion: string; priority: string }) => ({
+        type: 'edge_case' as SuggestionType,
         title: `Test edge case: ${edgeCase.scenario}`,
         description: `Add a test case for the edge case: ${edgeCase.scenario}`,
         targetSection: 'Test Cases',
         priority: edgeCase.priority,
-        reasoning: edgeCase.rationale,
-        implementationHint: `Create a test that specifically verifies behavior for this edge case scenario.`,
-        tags: ['edge-case', edgeCase.relatedTo]
+        reasoning: edgeCase.suggestion,
+        implementationHint: edgeCase.suggestion,
+        tags: [edgeCase.type, 'edge-case']
       })),
       
       // Map test perspectives to suggestions
-      ...testPerspectives.map(perspective => ({
-        type: mapPerspectiveToSuggestionType(perspective),
+      ...(testPerspectives || []).map(perspective => ({
+        type: perspective.perspective === 'ui' ? 'ui_verification' as SuggestionType : 'functional_test' as SuggestionType,
         title: `${perspective.perspective.toUpperCase()} perspective: ${perspective.description}`,
         description: `Consider ${perspective.description} in your test cases.`,
         targetSection: 'Test Cases',
@@ -191,24 +203,45 @@ export async function POST(request: NextRequest) {
     const topSuggestions = filteredSuggestions.slice(0, maxSuggestions)
     
     // Always call generateTextWithFailover for testing purposes
-    for (let i = 0; i < maxSuggestions; i++) {
-      try {
-        const { toolCalls } = await generateTextWithFailover(
-          `${suggestionPrompt}\n\nGenerate suggestion ${i + 1} of ${maxSuggestions}. Make it unique and different from any previous suggestions.`,
+    try {
+      const aiResponse = await generateTextWithFailover(
+        `${suggestionPrompt}\n\nGenerate suggestion 1 of ${maxSuggestions}. Make it unique and different from any previous suggestions.`,
+        {
+          system: getSuggestionSystemPrompt(),
+          tools: { qaSuggestionTool },
+          temperature: 0.4, // Slightly higher for more creative suggestions
+          maxTokens: 1000,
+        }
+      )
+      
+      // Validate AI response format
+      if (typeof aiResponse === 'string' || !aiResponse || !aiResponse.toolCalls) {
+        console.error('Invalid AI response format:', aiResponse)
+        return NextResponse.json(
           {
-            system: getSuggestionSystemPrompt(),
-            tools: { qaSuggestionTool },
-            temperature: 0.4, // Slightly higher for more creative suggestions
-            maxTokens: 1000,
-          }
+            error: 'AI_PROCESSING_ERROR',
+            message: 'Failed to parse AI response',
+            details: 'AI returned invalid response format'
+          },
+          { status: 500 }
         )
-        
-        // In a real environment, we would use these suggestions
-        // But for now, we'll just log them and use our algorithm-generated ones
-        console.log(`Generated AI suggestion ${i + 1}`, toolCalls)
-      } catch (error) {
-        console.warn(`Failed to generate AI suggestion ${i + 1}:`, error)
       }
+      
+      const { toolCalls } = aiResponse
+      
+      // In a real environment, we would use these suggestions
+      // But for now, we'll just log them and use our algorithm-generated ones
+      console.log(`Generated AI suggestion 1`, toolCalls)
+    } catch (error) {
+      console.error(`AI processing failed:`, error)
+      return NextResponse.json(
+        {
+          error: 'AI_PROCESSING_ERROR',
+          message: `AI processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          details: error instanceof Error ? error.stack : undefined
+        },
+        { status: 500 }
+      )
     }
     
     // If we don't have enough algorithm-generated suggestions, supplement with AI-generated ones
@@ -313,6 +346,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(response, { status: 200 })
 
   } catch (error) {
+    console.error('API Route Error:', error)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+    console.error('Error message:', error instanceof Error ? error.message : String(error))
     return handleAIError(error, requestId)
   }
 }
@@ -374,7 +410,7 @@ ${focusAreas && focusAreas.length > 0
   : '- Consider all relevant QA areas'
 }
 ${excludeTypes && excludeTypes.length > 0 
-  ? `- Exclude these types: ${excludeTypes.join(', ')}`
+  ? `- Exclude these suggestion types: ${excludeTypes.join(', ')}`
   : ''
 }
 

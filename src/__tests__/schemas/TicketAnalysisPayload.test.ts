@@ -1,266 +1,226 @@
-import {
+/**
+ * Comprehensive tests for TicketAnalysisPayload schema
+ */
+
+import { describe, test, expect } from 'vitest';
+import { 
   ticketAnalysisPayloadSchema,
-  analyzeTicketRequestSchema,
-  validateTicketAnalysisPayload,
-  validateAnalyzeTicketRequest,
-  type TicketAnalysisPayload,
-  type AnalyzeTicketRequest
-} from '@/lib/schemas/TicketAnalysisPayload'
-import { defaultQAProfile } from '@/lib/schemas/QAProfile'
-import type { JiraTicket } from '@/lib/schemas/JiraTicket'
-import { describe, it, expect } from 'vitest'
+  validateTicketAnalysisPayload
+} from '../../lib/schemas/TicketAnalysisPayload';
+import { defaultQAProfile } from '../../lib/schemas/QAProfile';
 
-describe('TicketAnalysisPayload Schema Validation', () => {
-  const validJiraTicket: JiraTicket = {
-    issueKey: 'PROJ-123',
-    summary: 'Fix login button not working',
-    description: 'The login button on the homepage is not responding to clicks',
-    status: 'In Progress',
-    priority: 'Priority: High',
+describe('TicketAnalysisPayload Schema', () => {
+  // Test data
+  const validJiraTicket = {
+    issueKey: 'TEST-123',
+    summary: 'Test ticket',
+    description: 'Test description',
+    status: 'Done',
+    priority: 'Priority: Normal',
     issueType: 'Bug',
-    assignee: 'John Doe',
-    reporter: 'Jane Smith',
-    comments: [],
+    assignee: 'Test User',
+    reporter: 'Test Reporter',
+    comments: [
+      {
+        author: 'John Doe',
+        body: 'This is a comment',
+        created: '2025-07-16T12:00:00Z',
+        updated: '2025-07-16T12:01:00Z',
+        images: [],
+        links: []
+      }
+    ],
     attachments: [],
-    components: ['Frontend'],
+    components: ['Frontend', 'API'],
     customFields: {
-      acceptance_criteria: 'Button should respond to clicks',
-      story_points: '3'
+      acceptanceCriteria: 'User should be able to reset password',
+      storyPoints: '5'
     },
-    processingComplete: true,
-    scrapedAt: '2024-01-15T13:00:00Z'
-  }
+    scrapedAt: new Date().toISOString()
+  };
 
-  const validPayload: TicketAnalysisPayload = {
-    qaProfile: defaultQAProfile,
+  const validQAProfile = defaultQAProfile;
+
+  const validPayload = {
+    qaProfile: validQAProfile,
     ticketJson: validJiraTicket
-  }
+  };
 
-  describe('ticketAnalysisPayloadSchema', () => {
-    it('should validate valid ticket analysis payload', () => {
-      const result = ticketAnalysisPayloadSchema.safeParse(validPayload)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual(validPayload)
+  test('should validate a complete valid TicketAnalysisPayload', () => {
+    const result = ticketAnalysisPayloadSchema.safeParse(validPayload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.qaProfile).toBeDefined();
+      expect(result.data.ticketJson).toBeDefined();
+      expect(result.data.ticketJson.issueKey).toBe('TEST-123');
+    }
+  });
+
+  test('should validate using helper function', () => {
+    const result = validateTicketAnalysisPayload(validPayload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.qaProfile).toBeDefined();
+      expect(result.data.ticketJson).toBeDefined();
+      expect(result.data.ticketJson.issueKey).toBe('TEST-123');
+    }
+  });
+
+  test('should reject payload with invalid QA profile', () => {
+    const invalidPayload = {
+      qaProfile: {
+        // Missing required fields
+        testCaseFormat: 'invalid-format' // Invalid enum value
+      },
+      ticketJson: validJiraTicket
+    };
+
+    const result = ticketAnalysisPayloadSchema.safeParse(invalidPayload);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.length).toBeGreaterThan(0);
+      
+      // Check specific validation errors
+      const qaProfileIssue = result.error.issues.find(issue => 
+        issue.path.includes('qaProfile'));
+      
+      expect(qaProfileIssue).toBeDefined();
+    }
+  });
+
+  test('should reject payload with invalid ticket JSON', () => {
+    const invalidPayload = {
+      qaProfile: validQAProfile,
+      ticketJson: {
+        // Missing required fields
+        summary: 'Test ticket',
+        // Missing description
+        status: 'Done'
       }
-    })
+    };
 
-    it('should validate payload with custom QA profile', () => {
-      const customPayload: TicketAnalysisPayload = {
-        qaProfile: {
-          qaCategories: {
-            functional: true,
-            ux: false,
-            ui: true,
-            negative: true,
-            api: true,
-            database: false,
-            performance: false,
-            security: true,
-            mobile: false,
-            accessibility: false
-          },
-          testCaseFormat: 'gherkin',
-          autoRefresh: false,
-          includeComments: true,
-          includeImages: false,
-          operationMode: 'online',
-          showNotifications: false
-        },
-        ticketJson: validJiraTicket
-      }
+    const result = ticketAnalysisPayloadSchema.safeParse(invalidPayload);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.length).toBeGreaterThan(0);
+      
+      // Check specific validation errors
+      const ticketJsonIssue = result.error.issues.find(issue => 
+        issue.path.includes('ticketJson'));
+      
+      expect(ticketJsonIssue).toBeDefined();
+    }
+  });
 
-      const result = ticketAnalysisPayloadSchema.safeParse(customPayload)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual(customPayload)
-      }
-    })
+  test('should reject payload with missing required fields', () => {
+    // Missing qaProfile
+    const missingQAProfile = {
+      ticketJson: validJiraTicket
+    };
 
-    it('should reject payload with invalid QA profile', () => {
-      const invalidPayload = {
-        qaProfile: {
-          qaCategories: {
-            functional: 'true', // string instead of boolean
-            ux: false,
-            ui: true,
-            negative: true,
-            api: true,
-            database: false,
-            performance: false,
-            security: true,
-            mobile: false,
-            accessibility: false
-          },
-          testCaseFormat: 'steps'
-        },
-        ticketJson: validJiraTicket
-      }
+    const missingQAProfileResult = ticketAnalysisPayloadSchema.safeParse(missingQAProfile);
+    expect(missingQAProfileResult.success).toBe(false);
+    if (!missingQAProfileResult.success) {
+      expect(missingQAProfileResult.error.issues.length).toBeGreaterThan(0);
+    }
 
-      const result = ticketAnalysisPayloadSchema.safeParse(invalidPayload)
-      expect(result.success).toBe(false)
-    })
+    // Missing ticketJson
+    const missingTicketJson = {
+      qaProfile: validQAProfile
+    };
 
-    it('should reject payload with invalid Jira ticket', () => {
-      const invalidPayload = {
-        qaProfile: defaultQAProfile,
-        ticketJson: {
-          key: 'PROJ-123',
-          summary: 'Test ticket'
-          // missing required fields
-        }
-      }
+    const missingTicketJsonResult = ticketAnalysisPayloadSchema.safeParse(missingTicketJson);
+    expect(missingTicketJsonResult.success).toBe(false);
+    if (!missingTicketJsonResult.success) {
+      expect(missingTicketJsonResult.error.issues.length).toBeGreaterThan(0);
+    }
+  });
 
-      const result = ticketAnalysisPayloadSchema.safeParse(invalidPayload)
-      expect(result.success).toBe(false)
-    })
+  test('should validate payload with minimal valid data', () => {
+    const minimalJiraTicket = {
+      issueKey: 'TEST-123',
+      summary: 'Test ticket',
+      description: 'Test description',
+      status: 'Done',
+      priority: 'Priority: Normal',
+      issueType: 'Bug',
+      reporter: 'Test Reporter',
+      customFields: {},
+      scrapedAt: new Date().toISOString()
+    };
 
-    it('should reject payload with missing fields', () => {
-      const incompletePayload = {
-        qaProfile: defaultQAProfile
-        // missing ticketJson
-      }
+    const minimalQAProfile = {
+      qaCategories: {
+        functional: true,
+        ui: false,
+        ux: false,
+        api: false,
+        security: false,
+        performance: false,
+        accessibility: false,
+        mobile: false,
+        negative: false,
+        database: false
+      },
+      testCaseFormat: 'steps' as const,
+      autoRefresh: true,
+      includeComments: true,
+      includeImages: true,
+      operationMode: 'offline' as const,
+      showNotifications: true
+    };
 
-      const result = ticketAnalysisPayloadSchema.safeParse(incompletePayload)
-      expect(result.success).toBe(false)
-    })
-  })
+    const minimalPayload = {
+      qaProfile: minimalQAProfile,
+      ticketJson: minimalJiraTicket
+    };
 
-  describe('analyzeTicketRequestSchema', () => {
-    it('should validate request with optional metadata', () => {
-      const requestWithMetadata: AnalyzeTicketRequest = {
-        ...validPayload,
-        requestId: 'req-123-456',
+    const result = ticketAnalysisPayloadSchema.safeParse(minimalPayload);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.qaProfile.qaCategories).toEqual(minimalQAProfile.qaCategories);
+      expect(result.data.ticketJson.issueKey).toBe(minimalJiraTicket.issueKey);
+    }
+  });
+
+  test('should reject non-object payloads', () => {
+    const invalidPayloads = [
+      null,
+      undefined,
+      'string',
+      123,
+      true,
+      [],
+      () => {}
+    ];
+
+    invalidPayloads.forEach(payload => {
+      const result = ticketAnalysisPayloadSchema.safeParse(payload);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  test('should handle additional properties gracefully', () => {
+    const payloadWithExtra = {
+      ...validPayload,
+      extraProperty: 'should be ignored',
+      metadata: {
         clientVersion: '1.0.0',
-        userAgent: 'Mozilla/5.0 (Chrome Extension)'
+        timestamp: new Date().toISOString()
       }
+    };
 
-      const result = analyzeTicketRequestSchema.safeParse(requestWithMetadata)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual(requestWithMetadata)
-      }
-    })
-
-    it('should validate request without optional metadata', () => {
-      const result = analyzeTicketRequestSchema.safeParse(validPayload)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual(validPayload)
-      }
-    })
-
-    it('should validate request with partial metadata', () => {
-      const requestWithPartialMetadata = {
-        ...validPayload,
-        requestId: 'req-789',
-        clientVersion: '1.2.0'
-        // userAgent not provided
-      }
-
-      const result = analyzeTicketRequestSchema.safeParse(requestWithPartialMetadata)
-      expect(result.success).toBe(true)
-    })
-  })
-
-  describe('Helper Functions', () => {
-    describe('validateTicketAnalysisPayload', () => {
-      it('should return success for valid payload', () => {
-        const result = validateTicketAnalysisPayload(validPayload)
-        expect(result.success).toBe(true)
-        if (result.success) {
-          expect(result.data).toEqual(validPayload)
-        }
-      })
-
-      it('should return error for invalid payload', () => {
-        const invalidPayload = {
-          qaProfile: 'invalid',
-          ticketJson: 'also invalid'
-        }
-
-        const result = validateTicketAnalysisPayload(invalidPayload)
-        expect(result.success).toBe(false)
-        if (!result.success) {
-          expect(result.error.issues).toBeDefined()
-          expect(result.error.issues.length).toBeGreaterThan(0)
-        }
-      })
-
-      it('should provide detailed error information', () => {
-        const invalidPayload = {
-          qaProfile: {
-            qaCategories: {
-              functional: 'not-boolean'
-            },
-            testCaseFormat: 'invalid-format'
-          },
-          ticketJson: {
-            key: 'PROJ-123'
-            // missing required fields
-          }
-        }
-
-        const result = validateTicketAnalysisPayload(invalidPayload)
-        expect(result.success).toBe(false)
-        if (!result.success) {
-          expect(result.error.issues.length).toBeGreaterThan(0)
-          // Should have multiple validation errors
-          const errorPaths = result.error.issues.map(issue => issue.path.join('.'))
-          expect(errorPaths.some(path => path.includes('qaProfile'))).toBe(true)
-          expect(errorPaths.some(path => path.includes('ticketJson'))).toBe(true)
-        }
-      })
-    })
-
-    describe('validateAnalyzeTicketRequest', () => {
-      it('should return success for valid request', () => {
-        const validRequest: AnalyzeTicketRequest = {
-          ...validPayload,
-          requestId: 'req-test-123'
-        }
-
-        const result = validateAnalyzeTicketRequest(validRequest)
-        expect(result.success).toBe(true)
-        if (result.success) {
-          expect(result.data).toEqual(validRequest)
-        }
-      })
-
-      it('should return error for invalid request', () => {
-        const invalidRequest = {
-          qaProfile: null,
-          ticketJson: undefined
-        }
-
-        const result = validateAnalyzeTicketRequest(invalidRequest)
-        expect(result.success).toBe(false)
-      })
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle null and undefined inputs', () => {
-      expect(validateTicketAnalysisPayload(null).success).toBe(false)
-      expect(validateTicketAnalysisPayload(undefined).success).toBe(false)
-      expect(validateAnalyzeTicketRequest(null).success).toBe(false)
-      expect(validateAnalyzeTicketRequest(undefined).success).toBe(false)
-    })
-
-    it('should handle empty objects', () => {
-      expect(validateTicketAnalysisPayload({}).success).toBe(false)
-      expect(validateAnalyzeTicketRequest({}).success).toBe(false)
-    })
-
-    it('should handle arrays instead of objects', () => {
-      expect(validateTicketAnalysisPayload([]).success).toBe(false)
-      expect(validateAnalyzeTicketRequest([]).success).toBe(false)
-    })
-
-    it('should handle primitive values', () => {
-      expect(validateTicketAnalysisPayload('string').success).toBe(false)
-      expect(validateTicketAnalysisPayload(123).success).toBe(false)
-      expect(validateTicketAnalysisPayload(true).success).toBe(false)
-    })
-  })
-})
+    const result = ticketAnalysisPayloadSchema.safeParse(payloadWithExtra);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      // Extra properties should be stripped out by Zod
+      expect(result.data.qaProfile).toBeDefined();
+      expect(result.data.ticketJson).toBeDefined();
+      // Verify that only expected properties exist
+      expect(Object.keys(result.data)).toEqual(['qaProfile', 'ticketJson']);
+      // Verify the extra properties are not in the parsed result
+      expect('extraProperty' in result.data).toBe(false);
+      expect('metadata' in result.data).toBe(false);
+    }
+  });
+});

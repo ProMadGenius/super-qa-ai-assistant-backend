@@ -17,7 +17,7 @@
 - **OpenAI GPT-4o**: Primary AI model (with Anthropic Claude as fallback)
 
 ### Testing & Quality
-- **Jest 29**: Testing framework with Next.js integration
+- **Vitest**: Testing framework with Next.js integration
 - **Supertest**: API endpoint testing
 - **ESLint**: Code linting with Next.js configuration
 
@@ -94,6 +94,6 @@ API_BASE_URL=http://localhost:3000  # Development
 
 ### Development Dependencies
 - `typescript ^5.0.0` - Type checking
-- `jest ^29.0.0` - Testing framework
+- `vitest ^1.0.0` - Testing framework
 - `@types/*` - TypeScript definitions
 - `eslint` - Code linting

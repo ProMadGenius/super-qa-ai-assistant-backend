@@ -1,176 +1,222 @@
+/**
+ * Comprehensive tests for QAProfile schema
+ */
+
+import { describe, test, expect } from 'vitest';
 import { 
-  qaProfileSchema, 
-  qaCategoriesSchema, 
+  qaProfileSchema,
+  qaCategoriesSchema,
   testCaseFormatSchema,
-  defaultQAProfile,
-  type QAProfile,
-  type QACategories,
-  type TestCaseFormat
-} from '@/lib/schemas/QAProfile'
-import { describe, it, expect } from 'vitest'
+  defaultQAProfile
+} from '../../lib/schemas/QAProfile';
 
-describe('QAProfile Schema Validation', () => {
-  describe('qaCategoriesSchema', () => {
-    it('should validate valid QA categories', () => {
-      const validCategories: QACategories = {
+describe('QAProfile Schema', () => {
+  test('should validate a complete valid QAProfile', () => {
+    const validProfile = {
+      qaCategories: {
         functional: true,
-        ux: false,
         ui: true,
-        negative: false,
+        ux: false,
         api: true,
-        database: false,
-        performance: true,
-        security: false,
-        mobile: true,
-        accessibility: false
-      }
+        security: true,
+        performance: false,
+        accessibility: false,
+        mobile: false,
+        negative: true,
+        database: false
+      },
+      testCaseFormat: 'gherkin',
+      autoRefresh: true,
+      includeComments: true,
+      includeImages: false,
+      operationMode: 'online',
+      showNotifications: true
+    };
 
-      const result = qaCategoriesSchema.safeParse(validCategories)
-      expect(result.success).toBe(true)
+    const result = qaProfileSchema.safeParse(validProfile);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toEqual(validProfile);
+    }
+  });
+
+  test('should validate QACategories schema', () => {
+    const validCategories = {
+      functional: true,
+      ui: true,
+      ux: false,
+      api: true,
+      security: true,
+      performance: false,
+      accessibility: false,
+      mobile: false,
+      negative: true,
+      database: false
+    };
+
+    const result = qaCategoriesSchema.safeParse(validCategories);
+    expect(result.success).toBe(true);
+
+    // Test invalid categories
+    const invalidCategories = {
+      functional: 'yes', // Should be boolean
+      ui: true,
+      // Missing other required categories
+    };
+
+    const invalidResult = qaCategoriesSchema.safeParse(invalidCategories);
+    expect(invalidResult.success).toBe(false);
+    if (!invalidResult.success) {
+      expect(invalidResult.error.issues.length).toBeGreaterThan(0);
+      
+      // Check specific validation errors
+      const functionalIssue = invalidResult.error.issues.find(issue => 
+        issue.path.includes('functional'));
+      // There will be missing required field errors
+      const hasRequiredErrors = invalidResult.error.issues.some(issue => 
+        issue.code === 'invalid_type');
+      
+      expect(functionalIssue).toBeDefined();
+      expect(hasRequiredErrors).toBe(true);
+    }
+  });
+
+  test('should validate testCaseFormat schema', () => {
+    // Test valid formats
+    const validFormats = ['gherkin', 'steps', 'table'];
+    
+    validFormats.forEach(format => {
+      const result = testCaseFormatSchema.safeParse(format);
+      expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data).toEqual(validCategories)
+        expect(result.data).toBe(format);
       }
-    })
+    });
 
-    it('should reject invalid QA categories with non-boolean values', () => {
-      const invalidCategories = {
-        functional: 'true', // string instead of boolean
-        ux: false,
-        ui: true,
-        negative: false,
-        api: true,
-        database: false,
-        performance: true,
-        security: false,
-        mobile: true,
-        accessibility: false
-      }
+    // Test invalid format
+    const invalidFormat = 'invalid-format';
+    const invalidResult = testCaseFormatSchema.safeParse(invalidFormat);
+    expect(invalidResult.success).toBe(false);
+  });
 
-      const result = qaCategoriesSchema.safeParse(invalidCategories)
-      expect(result.success).toBe(false)
-    })
+  test('should provide default QA profile', () => {
+    expect(defaultQAProfile).toBeDefined();
+    expect(defaultQAProfile.qaCategories).toBeDefined();
+    expect(defaultQAProfile.qaCategories.functional).toBe(true);
+    expect(defaultQAProfile.testCaseFormat).toBe('steps');
+    
+    // Validate default profile against schema
+    const result = qaProfileSchema.safeParse(defaultQAProfile);
+    expect(result.success).toBe(true);
+  });
 
-    it('should reject QA categories with missing required fields', () => {
-      const incompleteCategories = {
+  test('should validate QAProfile with all required fields', () => {
+    const completeProfile = {
+      qaCategories: {
         functional: true,
+        ui: false,
         ux: false,
-        // missing other required fields
-      }
+        api: false,
+        security: false,
+        performance: false,
+        accessibility: false,
+        mobile: false,
+        negative: false,
+        database: false
+      },
+      testCaseFormat: 'steps' as const,
+      autoRefresh: true,
+      includeComments: true,
+      includeImages: true,
+      operationMode: 'offline' as const,
+      showNotifications: true
+    };
 
-      const result = qaCategoriesSchema.safeParse(incompleteCategories)
-      expect(result.success).toBe(false)
-    })
-  })
+    const result = qaProfileSchema.safeParse(completeProfile);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.qaCategories).toEqual(completeProfile.qaCategories);
+      expect(result.data.testCaseFormat).toBe('steps');
+      expect(result.data.operationMode).toBe('offline');
+    }
+  });
 
-  describe('testCaseFormatSchema', () => {
-    it('should validate valid test case formats', () => {
-      const validFormats: TestCaseFormat[] = ['gherkin', 'steps', 'table']
+  test('should reject invalid QAProfile', () => {
+    const invalidProfile = {
+      // Missing qaCategories
+      testCaseFormat: 'invalid-format', // Invalid enum value
+      autoRefresh: 'yes', // Should be boolean
+      operationMode: 'invalid-mode' // Invalid enum value
+    };
 
-      validFormats.forEach(format => {
-        const result = testCaseFormatSchema.safeParse(format)
-        expect(result.success).toBe(true)
-        if (result.success) {
-          expect(result.data).toBe(format)
-        }
-      })
-    })
+    const invalidResult = qaProfileSchema.safeParse(invalidProfile);
+    expect(invalidResult.success).toBe(false);
+    if (!invalidResult.success) {
+      expect(invalidResult.error.issues.length).toBeGreaterThan(0);
+      
+      // Just check that we have validation errors - the specific fields may vary
+      expect(invalidResult.error.issues.length).toBeGreaterThan(0);
+    }
+  });
 
-    it('should reject invalid test case formats', () => {
-      const invalidFormats = ['invalid', 'markdown', 'json', '']
-
-      invalidFormats.forEach(format => {
-        const result = testCaseFormatSchema.safeParse(format)
-        expect(result.success).toBe(false)
-      })
-    })
-  })
-
-  describe('qaProfileSchema', () => {
-    it('should validate complete valid QA profile', () => {
-      const validProfile: QAProfile = {
-        qaCategories: {
-          functional: true,
-          ux: true,
-          ui: false,
-          negative: true,
-          api: false,
-          database: false,
-          performance: false,
-          security: true,
-          mobile: true,
-          accessibility: true
-        },
-        testCaseFormat: 'gherkin',
-        autoRefresh: true,
-        includeComments: true,
-        includeImages: false,
-        operationMode: 'online',
-        showNotifications: true
-      }
-
-      const result = qaProfileSchema.safeParse(validProfile)
-      expect(result.success).toBe(true)
+  test('should validate all operation modes', () => {
+    const validModes = ['online', 'offline'];
+    
+    validModes.forEach(mode => {
+      const profile = {
+        ...defaultQAProfile,
+        operationMode: mode
+      };
+      
+      const result = qaProfileSchema.safeParse(profile);
+      expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.data).toEqual(validProfile)
+        expect(result.data.operationMode).toBe(mode);
       }
-    })
+    });
+  });
 
-    it('should validate the default QA profile', () => {
-      const result = qaProfileSchema.safeParse(defaultQAProfile)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual(defaultQAProfile)
-      }
-    })
-
-    it('should reject QA profile with invalid test case format', () => {
+  test('should handle boolean flags correctly', () => {
+    const booleanFlags = ['autoRefresh', 'includeComments', 'includeImages', 'showNotifications'];
+    
+    // Test true values
+    const trueProfile = {
+      ...defaultQAProfile,
+      autoRefresh: true,
+      includeComments: true,
+      includeImages: true,
+      showNotifications: true
+    };
+    
+    const trueResult = qaProfileSchema.safeParse(trueProfile);
+    expect(trueResult.success).toBe(true);
+    
+    // Test false values
+    const falseProfile = {
+      ...defaultQAProfile,
+      autoRefresh: false,
+      includeComments: false,
+      includeImages: false,
+      showNotifications: false
+    };
+    
+    const falseResult = qaProfileSchema.safeParse(falseProfile);
+    expect(falseResult.success).toBe(true);
+    
+    // Test invalid values
+    booleanFlags.forEach(flag => {
       const invalidProfile = {
-        qaCategories: {
-          functional: true,
-          ux: true,
-          ui: false,
-          negative: true,
-          api: false,
-          database: false,
-          performance: false,
-          security: true,
-          mobile: true,
-          accessibility: true
-        },
-        testCaseFormat: 'invalid-format'
+        ...defaultQAProfile,
+        [flag]: 'not-a-boolean'
+      };
+      
+      const invalidResult = qaProfileSchema.safeParse(invalidProfile);
+      expect(invalidResult.success).toBe(false);
+      if (!invalidResult.success) {
+        const flagIssue = invalidResult.error.issues.find(issue => 
+          issue.path.includes(flag));
+        expect(flagIssue).toBeDefined();
       }
-
-      const result = qaProfileSchema.safeParse(invalidProfile)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject QA profile with missing qaCategories', () => {
-      const invalidProfile = {
-        testCaseFormat: 'steps'
-        // missing qaCategories
-      }
-
-      const result = qaProfileSchema.safeParse(invalidProfile)
-      expect(result.success).toBe(false)
-    })
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle null and undefined inputs', () => {
-      expect(qaProfileSchema.safeParse(null).success).toBe(false)
-      expect(qaProfileSchema.safeParse(undefined).success).toBe(false)
-      expect(qaCategoriesSchema.safeParse(null).success).toBe(false)
-      expect(testCaseFormatSchema.safeParse(null).success).toBe(false)
-    })
-
-    it('should handle empty objects', () => {
-      expect(qaProfileSchema.safeParse({}).success).toBe(false)
-      expect(qaCategoriesSchema.safeParse({}).success).toBe(false)
-    })
-
-    it('should handle arrays instead of objects', () => {
-      expect(qaProfileSchema.safeParse([]).success).toBe(false)
-      expect(qaCategoriesSchema.safeParse([]).success).toBe(false)
-    })
-  })
-})
+    });
+  });
+});

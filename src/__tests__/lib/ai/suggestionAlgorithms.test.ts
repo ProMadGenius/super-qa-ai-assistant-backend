@@ -1,357 +1,387 @@
-import {
-  analyzeCoverageGaps,
-  generateClarificationQuestions,
-  identifyEdgeCases,
-  generateTestPerspectives,
-  mapGapToSuggestionType,
-  mapAmbiguityToSuggestionType,
-  mapEdgeCaseToSuggestionType,
-  mapPerspectiveToSuggestionType
-} from '../../../lib/ai/suggestionAlgorithms'
-import { QACanvasDocument } from '../../../lib/schemas/QACanvasDocument'
+/**
+ * Comprehensive tests for suggestion algorithms
+ */
 
-// Sample test document for testing algorithms
-const sampleDocument: QACanvasDocument = {
-  ticketSummary: {
-    problem: 'The login button does not work on mobile devices',
-    solution: 'Fix the click handler for the button and improve error handling',
-    context: 'Mobile application with authentication system'
-  },
-  configurationWarnings: [
-    {
-      type: 'category_mismatch',
-      title: 'Mobile testing recommended',
-      message: 'This ticket affects mobile functionality',
-      recommendation: 'Enable mobile testing category',
-      severity: 'medium'
-    }
-  ],
-  acceptanceCriteria: [
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { 
+  analyzeCoverageGaps,
+  identifyEdgeCases,
+  generateClarificationQuestions,
+  generateSuggestions,
+  prioritizeSuggestions,
+  filterSuggestionsByType
+} from '../../../lib/ai/suggestionAlgorithms';
+import { createMinimalQACanvasDocument } from '../../../lib/schemas/QACanvasDocument';
+import { defaultQAProfile } from '../../../lib/schemas/QAProfile';
+import { createQASuggestion } from '../../../lib/schemas/QASuggestion';
+
+// Mock AI functions
+vi.mock('ai', () => ({
+  generateText: vi.fn(),
+  tool: vi.fn().mockImplementation((config) => ({
+    ...config,
+    _isTool: true
+  }))
+}));
+
+import { generateText } from 'ai';
+
+describe('Suggestion Algorithms', () => {
+  // Sample test data
+  const sampleDocument = createMinimalQACanvasDocument('TEST-123', defaultQAProfile);
+  
+  // Update sample document with more realistic data
+  sampleDocument.ticketSummary = {
+    problem: 'Users cannot reset their password when using special characters',
+    solution: 'Update password reset functionality to handle special characters correctly',
+    context: 'The password reset feature is critical for user account management'
+  };
+  
+  sampleDocument.acceptanceCriteria = [
     {
       id: 'ac-1',
-      title: 'Login button works on mobile',
-      description: 'User can successfully click the login button on mobile devices',
-      priority: 'must',
-      category: 'functional',
-      testable: true
-    },
-    {
-      id: 'ac-2',
-      title: 'Error handling works',
-      description: 'System shows appropriate error messages',
+      title: 'Password reset with special characters',
+      description: 'System should allow password reset with special characters',
       priority: 'must',
       category: 'functional',
       testable: true
     }
-  ],
-  testCases: [
+  ];
+  
+  sampleDocument.testCases = [
     {
-      format: 'gherkin',
+      format: 'steps',
       id: 'tc-1',
       category: 'functional',
       priority: 'high',
       testCase: {
-        scenario: 'User logs in successfully on mobile',
-        given: ['User is on the mobile login page'],
-        when: ['User taps the login button'],
-        then: ['User is logged in successfully'],
-        tags: ['@mobile', '@authentication']
-      }
-    }
-  ],
-  metadata: {
-    generatedAt: new Date().toISOString(),
-    qaProfile: {
-      testCaseFormat: 'gherkin',
-      qaCategories: {
-        functional: true,
-        ui: false,
-        ux: false,
-        performance: false,
-        security: false,
-        accessibility: false,
-        api: false,
-        database: false,
-        negative: false,
-        mobile: true
-      }
-    },
-    ticketId: 'TEST-123',
-    documentVersion: '1.0'
-  }
-}
-
-// Document with ambiguous requirements
-const ambiguousDocument: QACanvasDocument = {
-  ...sampleDocument,
-  ticketSummary: {
-    problem: "It doesn't work properly",
-    solution: "Make it work better",
-    context: "The system should handle this appropriately"
-  },
-  acceptanceCriteria: [
-    {
-      id: 'ac-1',
-      title: 'Reasonable performance',
-      description: 'The system should respond in a reasonable time',
-      priority: 'must',
-      category: 'performance',
-      testable: true
-    }
-  ]
-}
-
-// Document with missing test coverage
-const missingCoverageDocument: QACanvasDocument = {
-  ...sampleDocument,
-  acceptanceCriteria: [
-    ...sampleDocument.acceptanceCriteria,
-    {
-      id: 'ac-3',
-      title: 'Security validation',
-      description: 'System validates user credentials securely',
-      priority: 'must',
-      category: 'security',
-      testable: true
-    }
-  ],
-  metadata: {
-    ...sampleDocument.metadata,
-    qaProfile: {
-      testCaseFormat: 'gherkin',
-      qaCategories: {
-        functional: true,
-        ui: false,
-        ux: false,
-        performance: false,
-        security: true,
-        accessibility: false,
-        api: false,
-        database: false,
-        negative: false,
-        mobile: true
-      }
-    }
-  }
-}
-
-import { describe, it, expect } from 'vitest'
-
-describe('Suggestion Algorithms', () => {
-  describe('analyzeCoverageGaps', () => {
-    it('should identify missing test coverage for acceptance criteria', () => {
-      const gaps = analyzeCoverageGaps(missingCoverageDocument)
-      
-      // Should find at least one gap for the security criterion
-      expect(gaps.length).toBeGreaterThan(0)
-      expect(gaps.some(gap => gap.category === 'security')).toBe(true)
-    })
-    
-    it('should identify active categories without test coverage', () => {
-      const gaps = analyzeCoverageGaps(missingCoverageDocument)
-      
-      // Should find a gap for the security category
-      expect(gaps.some(gap => 
-        gap.category === 'security' && 
-        gap.description.includes('No test cases')
-      )).toBe(true)
-    })
-    
-    it('should not report gaps for categories with test coverage', () => {
-      const gaps = analyzeCoverageGaps(sampleDocument)
-      
-      // Should not find gaps for functional category since it has test coverage
-      expect(gaps.some(gap => 
-        gap.category === 'functional' && 
-        gap.description.includes('No test cases')
-      )).toBe(false)
-    })
-  })
-  
-  describe('generateClarificationQuestions', () => {
-    it('should identify vague terms in acceptance criteria', () => {
-      const ambiguities = generateClarificationQuestions(ambiguousDocument)
-      
-      // Should find ambiguity in "reasonable performance"
-      expect(ambiguities.length).toBeGreaterThan(0)
-      expect(ambiguities.some(a => 
-        a.text.includes('reasonable time')
-      )).toBe(true)
-    })
-    
-    it('should identify missing context in problem statement', () => {
-      const ambiguities = generateClarificationQuestions(ambiguousDocument)
-      
-      // Should find ambiguity in vague problem statement
-      expect(ambiguities.some(a => 
-        a.source === 'Problem Statement' && 
-        a.ambiguityType === 'missing_context'
-      )).toBe(true)
-    })
-    
-    it('should not generate questions for clear requirements', () => {
-      const ambiguities = generateClarificationQuestions(sampleDocument)
-      
-      // Should not find ambiguity in clear acceptance criteria
-      expect(ambiguities.some(a => 
-        a.text.includes('User can successfully click')
-      )).toBe(false)
-    })
-  })
-  
-  describe('identifyEdgeCases', () => {
-    it('should identify edge cases for user input', () => {
-      // Add input-related content to the document
-      const inputDocument: QACanvasDocument = {
-        ...sampleDocument,
-        ticketSummary: {
-          ...sampleDocument.ticketSummary,
-          solution: 'Fix the form submission and input validation'
-        }
-      }
-      
-      const edgeCases = identifyEdgeCases(inputDocument)
-      
-      // Should find edge cases related to input validation
-      expect(edgeCases.length).toBeGreaterThan(0)
-      expect(edgeCases.some(ec => 
-        ec.relatedTo === 'Input Validation'
-      )).toBe(true)
-    })
-    
-    it('should identify edge cases for authentication', () => {
-      const edgeCases = identifyEdgeCases(sampleDocument)
-      
-      // Should find edge cases related to authentication
-      expect(edgeCases.some(ec => 
-        ec.relatedTo === 'Authentication'
-      )).toBe(true)
-    })
-    
-    it('should identify mobile-specific edge cases', () => {
-      const edgeCases = identifyEdgeCases(sampleDocument)
-      
-      // Should find edge cases related to mobile
-      expect(edgeCases.some(ec => 
-        ec.relatedTo === 'Mobile UI'
-      )).toBe(true)
-    })
-  })
-  
-  describe('generateTestPerspectives', () => {
-    it('should generate UI testing perspectives for UI categories', () => {
-      // Add UI category to the document
-      const uiDocument: QACanvasDocument = {
-        ...sampleDocument,
-        metadata: {
-          ...sampleDocument.metadata,
-          qaProfile: {
-            testCaseFormat: 'gherkin',
-            qaCategories: {
-              functional: true,
-              ui: true,
-              ux: false,
-              performance: false,
-              security: false,
-              accessibility: false,
-              api: false,
-              database: false,
-              negative: false,
-              mobile: true
-            }
+        title: 'Reset password with special characters',
+        objective: 'Verify that users can reset passwords containing special characters',
+        preconditions: ['User account exists', 'User has access to email'],
+        steps: [
+          {
+            stepNumber: 1,
+            action: 'Navigate to password reset page',
+            expectedResult: 'Password reset page loads'
+          },
+          {
+            stepNumber: 2,
+            action: 'Enter email address',
+            expectedResult: 'Email field accepts input'
+          },
+          {
+            stepNumber: 3,
+            action: 'Submit reset request',
+            expectedResult: 'Reset email is sent'
+          },
+          {
+            stepNumber: 4,
+            action: 'Open email and click reset link',
+            expectedResult: 'Reset password page opens'
+          },
+          {
+            stepNumber: 5,
+            action: 'Enter new password with special characters',
+            expectedResult: 'Password field accepts special characters'
+          },
+          {
+            stepNumber: 6,
+            action: 'Confirm password reset',
+            expectedResult: 'Password is successfully reset'
           }
-        }
+        ],
+        postconditions: ['User can login with new password']
       }
-      
-      const perspectives = generateTestPerspectives(uiDocument)
-      
-      // Should find UI testing perspectives
-      expect(perspectives.length).toBeGreaterThan(0)
-      expect(perspectives.some(p => 
-        p.perspective === 'ui'
-      )).toBe(true)
+    }
+  ];
+
+  // Sample suggestions
+  const sampleSuggestions = [
+    createQASuggestion({
+      suggestionType: 'edge_case',
+      title: 'Test password reset with extremely long passwords',
+      description: 'Add a test case for passwords that are at the maximum allowed length',
+      priority: 'medium',
+      reasoning: 'Edge cases around password length limits are common sources of bugs',
+      relatedRequirements: ['ac-1'],
+      tags: ['password', 'edge-case', 'validation']
+    }),
+    createQASuggestion({
+      suggestionType: 'ui_verification',
+      title: 'Verify error message display for invalid password formats',
+      description: 'Add UI verification for error message styling and placement',
+      priority: 'low',
+      reasoning: 'Error messages should be clearly visible and properly styled',
+      relatedRequirements: ['ac-1'],
+      tags: ['ui', 'error-handling', 'validation']
+    }),
+    createQASuggestion({
+      suggestionType: 'clarification_question',
+      title: 'What specific special characters need to be supported?',
+      description: 'Clarify which special characters are required for password reset',
+      priority: 'high',
+      reasoning: 'The requirements do not specify which special characters must be supported',
+      relatedRequirements: ['ac-1'],
+      tags: ['requirements', 'clarification']
     })
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('should generate suggestions successfully', async () => {
+    // Mock the AI function
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JSON.stringify({
+      suggestions: sampleSuggestions
+    }));
     
-    it('should generate functional testing perspectives', () => {
-      const perspectives = generateTestPerspectives(sampleDocument)
-      
-      // Should find functional testing perspectives
-      expect(perspectives.some(p => 
-        p.perspective === 'functional'
-      )).toBe(true)
-    })
+    const result = await generateSuggestions(
+      sampleDocument,
+      { maxSuggestions: 3 }
+    );
     
-    it('should not generate perspectives for inactive categories', () => {
-      const perspectives = generateTestPerspectives(sampleDocument)
-      
-      // Should not find security testing perspectives
-      expect(perspectives.some(p => 
-        p.perspective === 'security'
-      )).toBe(false)
-    })
-  })
-  
-  describe('Mapping functions', () => {
-    it('should map coverage gaps to correct suggestion types', () => {
-      const gap = {
-        category: 'edge_case',
-        description: 'Missing edge case coverage',
-        severity: 'high' as const,
-        suggestedAction: 'Add edge case tests'
-      }
-      
-      expect(mapGapToSuggestionType(gap)).toBe('edge_case')
-      
-      const uiGap = {
-        category: 'ui',
-        description: 'Missing UI tests',
-        severity: 'medium' as const,
-        suggestedAction: 'Add UI tests'
-      }
-      
-      expect(mapGapToSuggestionType(uiGap)).toBe('ui_verification')
-    })
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.suggestions).toHaveLength(3);
+    expect(result.suggestions[0].suggestionType).toBe('edge_case');
+    expect(result.suggestions[1].suggestionType).toBe('ui_verification');
+    expect(result.suggestions[2].suggestionType).toBe('clarification_question');
     
-    it('should map ambiguities to clarification questions', () => {
-      const ambiguity = {
-        source: 'Acceptance Criterion',
-        text: 'System should respond quickly',
-        ambiguityType: 'vague_term' as const,
-        clarificationQuestion: 'What does quickly mean?'
-      }
-      
-      expect(mapAmbiguityToSuggestionType(ambiguity)).toBe('clarification_question')
-    })
+    // Verify the AI function was called correctly
+    expect(generateText).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('Generate QA suggestions'),
+      tools: expect.objectContaining({
+        qaSuggestionTool: expect.any(Object)
+      })
+    }));
+  });
+
+  test('should analyze coverage gaps', () => {
+    const result = analyzeCoverageGaps(sampleDocument);
     
-    it('should map edge cases to edge case suggestion type', () => {
-      const edgeCase = {
-        scenario: 'Network timeout',
-        relatedTo: 'Error Handling',
-        priority: 'high' as const,
-        rationale: 'System should handle network timeouts'
-      }
-      
-      expect(mapEdgeCaseToSuggestionType(edgeCase)).toBe('edge_case')
-    })
+    expect(result).toBeDefined();
+    expect(result.gaps).toBeInstanceOf(Array);
     
-    it('should map test perspectives to appropriate suggestion types', () => {
-      const uiPerspective = {
-        perspective: 'ui' as const,
-        description: 'Visual consistency',
-        applicability: 'high' as const,
-        implementationHint: 'Test across screen sizes'
+    // The sample document only has functional tests, so should identify gaps
+    expect(result.gaps).toContain('negative_testing');
+    expect(result.gaps).toContain('ui_testing');
+    
+    // Should identify covered areas
+    expect(result.coveredAreas).toContain('functional_testing');
+    expect(result.coveredAreas).toContain('password_reset');
+    
+    // Should calculate coverage percentage
+    expect(result.coveragePercentage).toBeGreaterThan(0);
+    expect(result.coveragePercentage).toBeLessThan(100);
+  });
+
+  test('should identify edge cases', () => {
+    const result = identifyEdgeCases(sampleDocument);
+    
+    expect(result).toBeDefined();
+    expect(result.edgeCases).toBeInstanceOf(Array);
+    
+    // Should identify potential edge cases for password reset
+    expect(result.edgeCases.length).toBeGreaterThan(0);
+    
+    // Check for common password reset edge cases
+    const edgeCaseTypes = result.edgeCases.map(ec => ec.type);
+    expect(edgeCaseTypes).toContain('boundary_condition');
+    expect(edgeCaseTypes).toContain('input_validation');
+    
+    // Should provide suggestions for each edge case
+    expect(result.edgeCases[0].suggestion).toBeDefined();
+  });
+
+  test('should generate clarification questions', () => {
+    const result = generateClarificationQuestions(sampleDocument);
+    
+    expect(result).toBeDefined();
+    expect(result.questions).toBeInstanceOf(Array);
+    expect(result.questions.length).toBeGreaterThan(0);
+    
+    // Should identify areas needing clarification
+    expect(result.unclearAreas).toBeInstanceOf(Array);
+    
+    // Should provide context for each question
+    expect(result.questions[0].context).toBeDefined();
+    expect(result.questions[0].question).toBeDefined();
+  });
+
+  test('should prioritize suggestions', () => {
+    const result = prioritizeSuggestions(sampleSuggestions, sampleDocument);
+    
+    expect(result).toBeDefined();
+    expect(result).toBeInstanceOf(Array);
+    expect(result).toHaveLength(3);
+    
+    // Should be sorted by priority (high to low)
+    expect(result[0].priority).toBe('high');
+    expect(result[1].priority).toBe('medium');
+    expect(result[2].priority).toBe('low');
+    
+    // Should have relevance scores
+    expect(result[0].relevanceScore).toBeDefined();
+    expect(result[0].relevanceScore).toBeGreaterThan(0);
+  });
+
+  test('should filter suggestions by type', () => {
+    // Filter for edge cases only
+    const edgeCases = filterSuggestionsByType(sampleSuggestions, ['edge_case']);
+    expect(edgeCases).toHaveLength(1);
+    expect(edgeCases[0].suggestionType).toBe('edge_case');
+    
+    // Filter for UI and clarification questions
+    const uiAndQuestions = filterSuggestionsByType(sampleSuggestions, ['ui_verification', 'clarification_question']);
+    expect(uiAndQuestions).toHaveLength(2);
+    expect(uiAndQuestions[0].suggestionType).toBe('ui_verification');
+    expect(uiAndQuestions[1].suggestionType).toBe('clarification_question');
+    
+    // Filter with no matches
+    const noMatches = filterSuggestionsByType(sampleSuggestions, ['performance_test']);
+    expect(noMatches).toHaveLength(0);
+  });
+
+  test('should handle AI errors during suggestion generation', async () => {
+    // Mock the AI function to throw an error
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('AI service unavailable')
+    );
+    
+    const result = await generateSuggestions(
+      sampleDocument,
+      { maxSuggestions: 3 }
+    );
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error?.message).toBe('AI service unavailable');
+    expect(result.suggestions).toEqual([]);
+  });
+
+  test('should handle invalid AI responses', async () => {
+    // Mock the AI function to return invalid JSON
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce('Not valid JSON');
+    
+    const result = await generateSuggestions(
+      sampleDocument,
+      { maxSuggestions: 3 }
+    );
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.suggestions).toEqual([]);
+  });
+
+  test('should respect maxSuggestions parameter', async () => {
+    // Create a larger set of suggestions
+    const manySuggestions = [
+      ...sampleSuggestions,
+      createQASuggestion({
+        suggestionType: 'functional_test',
+        title: 'Test password reset email expiration',
+        description: 'Add a test case for password reset link expiration',
+        priority: 'medium',
+        reasoning: 'Security feature that should be tested',
+        relatedRequirements: ['ac-1'],
+        tags: ['password', 'security', 'expiration']
+      }),
+      createQASuggestion({
+        suggestionType: 'negative_test',
+        title: 'Test password reset with invalid token',
+        description: 'Add a negative test for invalid reset tokens',
+        priority: 'medium',
+        reasoning: 'Security validation is important',
+        relatedRequirements: ['ac-1'],
+        tags: ['password', 'security', 'negative']
+      })
+    ];
+    
+    // Mock the AI function
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JSON.stringify({
+      suggestions: manySuggestions
+    }));
+    
+    // Request only 2 suggestions
+    const result = await generateSuggestions(
+      sampleDocument,
+      { maxSuggestions: 2 }
+    );
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.suggestions).toHaveLength(2); // Should be limited to 2
+  });
+
+  test('should handle empty document gracefully', async () => {
+    const emptyDocument = createMinimalQACanvasDocument('EMPTY-123', defaultQAProfile);
+    
+    // Mock the AI function
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JSON.stringify({
+      suggestions: [
+        createQASuggestion({
+          suggestionType: 'clarification_question',
+          title: 'What is the purpose of this ticket?',
+          description: 'The ticket lacks details about its purpose',
+          priority: 'high',
+          reasoning: 'Cannot generate meaningful tests without understanding the purpose',
+          relatedRequirements: [],
+          tags: ['requirements', 'clarification']
+        })
+      ]
+    }));
+    
+    const result = await generateSuggestions(
+      emptyDocument,
+      { maxSuggestions: 3 }
+    );
+    
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0].suggestionType).toBe('clarification_question');
+  });
+
+  test('should include focus areas in prompt when specified', async () => {
+    // Mock the AI function
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JSON.stringify({
+      suggestions: sampleSuggestions
+    }));
+    
+    await generateSuggestions(
+      sampleDocument,
+      { 
+        maxSuggestions: 3,
+        focusAreas: ['security', 'performance']
       }
-      
-      expect(mapPerspectiveToSuggestionType(uiPerspective)).toBe('ui_verification')
-      
-      const functionalPerspective = {
-        perspective: 'functional' as const,
-        description: 'State management',
-        applicability: 'high' as const,
-        implementationHint: 'Test state transitions'
+    );
+    
+    // Verify the AI function was called with focus areas in the prompt
+    expect(generateText).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('Focus on these areas: security, performance')
+    }));
+  });
+
+  test('should exclude specified suggestion types when requested', async () => {
+    // Mock the AI function
+    (generateText as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JSON.stringify({
+      suggestions: sampleSuggestions
+    }));
+    
+    await generateSuggestions(
+      sampleDocument,
+      { 
+        maxSuggestions: 3,
+        excludeTypes: ['clarification_question']
       }
-      
-      expect(mapPerspectiveToSuggestionType(functionalPerspective)).toBe('functional_test')
-    })
-  })
-})
+    );
+    
+    // Verify the AI function was called with exclude types in the prompt
+    expect(generateText).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('Exclude these suggestion types: clarification_question')
+    }));
+  });
+});

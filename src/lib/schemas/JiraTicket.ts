@@ -20,9 +20,14 @@ export const commentImageSchema = z.object({
 export const jiraCommentSchema = z.object({
   author: z.string().describe('Comment author name'),
   body: z.string().describe('Comment content'),
-  date: z.string().describe('Comment creation date string'),
+  date: z.string().optional().describe('Comment creation date string'),
+  created: z.string().optional().describe('Comment creation date string'),
+  updated: z.string().optional().describe('Comment update date string'),
   images: z.array(commentImageSchema).default([]).describe('Images embedded in the comment'),
   links: z.array(z.string()).default([]).describe('Links mentioned in the comment')
+}).refine(data => data.date || data.created, {
+  message: "Either 'date' or 'created' field must be provided",
+  path: ['date']
 })
 
 /**

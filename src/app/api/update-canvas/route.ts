@@ -1,21 +1,16 @@
 import { NextRequest } from 'next/server'
-import { streamText } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { streamTextWithFailover } from '../../../lib/ai/providerFailover'
 import { z } from 'zod'
 import { handleAIError, handleValidationError } from '../../../lib/ai/errorHandler'
 import { 
-  transformMessagesForAI, 
   buildContextAwarePrompt,
   extractConversationIntent,
-  validateUIMessageFormat,
   sanitizeMessagesForAI,
   UIMessage,
   SystemPromptContext
 } from '../../../lib/ai/messageTransformer'
 import {
-  documentAssumptions,
-  generateClarifyingQuestions,
-  UncertaintyType
+  documentAssumptionsDetailed
 } from '../../../lib/ai/uncertaintyHandler'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -67,14 +62,13 @@ export async function POST(request: NextRequest) {
 
     const { messages, currentDocument }: UpdateCanvasPayload = validationResult.data
 
-    // Validate UI message format
-    const messageValidation = validateUIMessageFormat(messages)
-    if (!messageValidation.valid) {
-      return handleValidationError(messageValidation.errors.map(error => ({
+    // Validate message format
+    if (!validateMessageFormat(messages)) {
+      return handleValidationError([{
         path: ['messages'],
-        message: error,
+        message: 'Invalid message format',
         code: 'invalid_format'
-      })), requestId)
+      }], requestId)
     }
 
     // Sanitize messages for AI processing
@@ -111,9 +105,9 @@ export async function POST(request: NextRequest) {
     const latestUserMessage = sanitizedMessages.filter(msg => msg.role === 'user').pop()
     
     // Document any assumptions we need to make
-    let assumptions = []
+    let assumptions: any[] = []
     if (latestUserMessage) {
-      assumptions = documentAssumptions(latestUserMessage, context)
+      assumptions = documentAssumptionsDetailed(latestUserMessage, context)
     }
     
     // Enhance system prompt with uncertainty handling instructions if needed
@@ -147,14 +141,15 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
 `
     }
 
-    // Stream the AI response for real-time updates
-    const result = await streamText({
-      model: openai('gpt-4o'),
-      system: enhancedSystemPrompt,
-      messages: modelMessages, // Use the transformed messages directly
-      temperature: 0.3,
-      maxTokens: 4000,
-    })
+    // Stream the AI response for real-time updates with failover
+    const result = await streamTextWithFailover(
+      enhancedSystemPrompt,
+      {
+        messages: modelMessages, // Use the transformed messages directly
+        temperature: 0.3,
+        maxTokens: 4000,
+      }
+    )
 
     // Return streaming response compatible with useChat hook
     return result.toDataStreamResponse()
@@ -167,7 +162,7 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
 /**
  * Build system prompt with current document context
  */
-function buildSystemPrompt(currentDocument?: UpdateCanvasPayload['currentDocument']): string {
+function _buildSystemPrompt(currentDocument?: UpdateCanvasPayload['currentDocument']): string {
   const basePrompt = `You are a QA analyst assistant helping to refine and improve QA documentation. Your role is to:
 
 1. **Understand user requests** for changes to QA documentation

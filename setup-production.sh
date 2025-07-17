@@ -1,75 +1,143 @@
 #!/bin/bash
 
-# QA ChatCanvas Backend Setup Script
-# This script sets up the production environment for the QA ChatCanvas Backend
+# QA ChatCanvas API Production Setup Script
+# This script sets up the production environment for the QA ChatCanvas API on Ubuntu 22.04 LTS
 
 # Exit on error
 set -e
 
-echo "=== QA ChatCanvas Backend Setup ==="
-echo "This script will set up the production environment for the QA ChatCanvas Backend"
+# Print commands before execution
+set -x
 
 # Check if running as root
-if [ "$EUID" -eq 0 ]; then
-  echo "Please do not run this script as root"
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root or with sudo"
   exit 1
 fi
 
-# Check if Node.js is installed
-if ! command -v node &> /dev/null; then
-  echo "Node.js is not installed. Please install Node.js 20+ before continuing."
-  exit 1
-fi
+# Update system packages
+apt-get update
+apt-get upgrade -y
 
-# Check Node.js version
-NODE_VERSION=$(node -v | cut -d 'v' -f 2 | cut -d '.' -f 1)
-if [ "$NODE_VERSION" -lt 20 ]; then
-  echo "Node.js version 20+ is required. Current version: $(node -v)"
-  exit 1
-fi
+# Install required packages
+apt-get install -y curl git build-essential
 
-# Check if PM2 is installed
-if ! command -v pm2 &> /dev/null; then
-  echo "Installing PM2 globally..."
-  npm install -g pm2
-fi
+# Install Node.js 20.x
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt-get install -y nodejs
+
+# Verify Node.js installation
+node --version
+npm --version
+
+# Install PM2 globally
+npm install -g pm2
+
+# Verify PM2 installation
+pm2 --version
+
+# Install Nginx
+apt-get install -y nginx
+
+# Verify Nginx installation
+nginx -v
+
+# Enable and start Nginx
+systemctl enable nginx
+systemctl start nginx
+
+# Create application directory
+mkdir -p /var/www/qa-chatcanvas-api
+cd /var/www/qa-chatcanvas-api
+
+# Clone repository (replace with actual repository URL)
+# git clone <repository-url> .
 
 # Install dependencies
-echo "Installing dependencies..."
 npm ci
 
-# Create .env.local if it doesn't exist
-if [ ! -f .env.local ]; then
-  echo "Creating .env.local from .env.example..."
-  cp .env.example .env.local
-  
-  echo "Please edit .env.local to add your API keys:"
-  echo "nano .env.local"
-fi
-
-# Build the application
-echo "Building the application..."
+# Build application
 npm run build
 
-# Create logs directory
-mkdir -p logs
+# Configure Nginx
+cat > /etc/nginx/sites-available/qa-chatcanvas-api << 'EOF'
+server {
+    listen 80;
+    server_name _;
 
-# Start the application with PM2
-echo "Starting the application with PM2..."
-pm2 start ecosystem.config.js --env production
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeout settings for streaming responses
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+    }
 
-# Save PM2 configuration
-echo "Saving PM2 configuration..."
+    # Logging
+    access_log /var/log/nginx/qa-chatcanvas-api-access.log;
+    error_log /var/log/nginx/qa-chatcanvas-api-error.log;
+}
+EOF
+
+# Enable the site
+ln -sf /etc/nginx/sites-available/qa-chatcanvas-api /etc/nginx/sites-enabled/
+
+# Remove default site
+rm -f /etc/nginx/sites-enabled/default
+
+# Test Nginx configuration
+nginx -t
+
+# Reload Nginx
+systemctl reload nginx
+
+# Configure environment variables
+cat > .env.local << 'EOF'
+# API Keys
+OPENAI_API_KEY=your-openai-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# AI Models
+OPENAI_MODEL=gpt-4o
+ANTHROPIC_MODEL=claude-3-opus-20240229
+
+# Circuit Breaker Configuration
+CIRCUIT_BREAKER_THRESHOLD=5
+CIRCUIT_BREAKER_RESET_TIMEOUT=60000
+MAX_RETRIES=3
+RETRY_DELAY_MS=1000
+
+# Logging
+LOG_LEVEL=info
+EOF
+
+# Start application with PM2
+pm2 start ecosystem.config.js
+
+# Save PM2 process list
 pm2 save
 
-# PM2 startup instructions
-echo "To configure PM2 to start on system boot, run:"
-echo "pm2 startup"
-echo "Then follow the instructions provided by the command."
+# Set PM2 to start on system boot
+pm2 startup
 
-echo "=== Setup Complete ==="
-echo "The QA ChatCanvas Backend is now running in production mode."
-echo "You can monitor it with: pm2 status qa-chatcanvas-backend"
-echo "View logs with: pm2 logs qa-chatcanvas-backend"
-echo ""
-echo "For more information, see docs/deployment.md"
+# Configure firewall
+ufw allow 'Nginx Full'
+ufw allow ssh
+ufw enable
+
+# Print success message
+echo "QA ChatCanvas API setup complete!"
+echo "Please update the API keys in .env.local and restart the application with: pm2 restart qa-chatcanvas-api"
+echo "You can access the API at http://your-server-ip"
+
+# Exit successfully
+exit 0

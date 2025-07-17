@@ -188,7 +188,7 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
       const enhancedDocument: QACanvasDocument = {
         ...generatedDocument,
         metadata: {
-          ...generatedDocument.metadata,
+          ...(generatedDocument.metadata || {}),
           generatedAt: new Date().toISOString(),
           qaProfile,
           ticketId: ticketJson.issueKey,
@@ -204,85 +204,9 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
       // Return the generated QA documentation
       return NextResponse.json(enhancedDocument, { status: 200 })
     } catch (error) {
-      const generationError = error;
-      console.error('Error generating complete document, attempting partial generation:', generationError)
-      
-      // Attempt to generate partial results
-      try {
-        // Create context for partial results generation
-        const context = {
-          currentDocument: {
-            ticketSummary: {
-              problem: ticketJson.summary || 'Unknown problem',
-              solution: 'Solution details unavailable due to processing error',
-              context: ticketJson.description?.substring(0, 200) || 'Context unavailable'
-            },
-            acceptanceCriteria: [],
-            testCases: [],
-            configurationWarnings: [
-              {
-                title: 'Document Generation Error',
-                message: `Failed to generate complete document: ${generationError instanceof Error ? generationError.message : String(generationError)}`,
-                recommendation: 'Try again with more detailed ticket information or different QA profile settings',
-                type: 'recommendation' as const,
-                severity: 'high' as const
-              }
-            ],
-            metadata: {
-              generatedAt: new Date().toISOString(),
-              qaProfile,
-              ticketId: ticketJson.issueKey,
-              documentVersion: '1.0',
-              aiModel: 'gpt-4o',
-              generationTime: Date.now() - startTime,
-              isPartialResult: true
-            }
-          }
-        }
-        
-        // Generate partial results
-        const partialResult = generatePartialResults(
-          { ticketJson, qaProfile }, 
-          context, 
-          generationError instanceof Error ? generationError : new Error(String(generationError))
-        )
-        
-        // Create a partial document with available information
-        const partialDocument: QACanvasDocument = {
-          ticketSummary: context.currentDocument.ticketSummary,
-          acceptanceCriteria: partialResult.fallbackContent?.acceptanceCriteria || [],
-          testCases: partialResult.fallbackContent?.testCases || [],
-          configurationWarnings: [
-            ...context.currentDocument.configurationWarnings,
-            {
-              title: 'Partial Results Generated',
-              message: partialResult.reason,
-              recommendation: 'Review the partial results and provide more information to generate complete documentation',
-              type: 'recommendation' as const,
-              severity: 'medium' as const
-            }
-          ],
-          metadata: {
-            ...context.currentDocument.metadata,
-            // Store partial result info in a custom field that won't conflict with schema
-            documentVersion: `1.0-partial-${partialResult.completedSections.length}-${partialResult.missingSections.length}`,
-            regenerationReason: partialResult.reason
-          }
-        }
-        
-        // Return partial results with appropriate status code
-        return NextResponse.json(partialDocument, { 
-          status: 206, // Partial Content
-          headers: {
-            'X-Partial-Result': 'true',
-            'X-Error-Details': encodeURIComponent(generationError.message)
-          }
-        })
-      } catch (fallbackError) {
-        // If even partial generation fails, throw the original error
-        console.error('Failed to generate partial results:', fallbackError)
-        throw generationError
-      }
+      console.error('Error generating complete document:', error)
+      // Don't attempt partial generation, just throw the error to be handled by the outer catch
+      throw error
     }
 
   } catch (error) {
@@ -341,6 +265,7 @@ function estimateWordCount(document: QACanvasDocument): number {
 /**
  * Helper function to count words in a string
  */
-function countWords(text: string): number {
+function countWords(text: string | undefined | null): number {
+  if (!text) return 0
   return text.trim().split(/\s+/).filter(word => word.length > 0).length
 }

@@ -11,10 +11,13 @@ import { getProviderHealthStatus } from './providerFailover'
  */
 export enum AIErrorType {
   VALIDATION_ERROR = 'VALIDATION_ERROR',
+  AI_PROCESSING_ERROR = 'AI_PROCESSING_ERROR',
   AI_GENERATION_ERROR = 'AI_GENERATION_ERROR',
+  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   RATE_LIMIT_ERROR = 'RATE_LIMIT_ERROR',
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
   PROVIDER_ERROR = 'PROVIDER_ERROR',
+  CONFIGURATION_ERROR = 'CONFIGURATION_ERROR',
   AUTHENTICATION_ERROR = 'AUTHENTICATION_ERROR',
   TIMEOUT_ERROR = 'TIMEOUT_ERROR',
   CONTEXT_LIMIT_ERROR = 'CONTEXT_LIMIT_ERROR',
@@ -45,6 +48,25 @@ export interface ErrorResponse {
  */
 export function handleAIError(error: unknown, requestId?: string): NextResponse<ErrorResponse> {
   console.error('AI Error:', error)
+  
+  // Check for missing API key first
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      {
+        error: AIErrorType.CONFIGURATION_ERROR,
+        message: 'API key configuration error',
+        details: 'OpenAI API key is not configured',
+        requestId,
+        errorCode: 'MISSING_API_KEY',
+        retryable: false,
+        suggestions: [
+          'Configure the OPENAI_API_KEY environment variable',
+          'Contact your administrator to set up API credentials'
+        ]
+      },
+      { status: 500 }
+    )
+  }
   
   // Get current provider status for error context
   const providerStatus = getProviderHealthStatus();
@@ -95,11 +117,12 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
   if (error instanceof Error) {
     // Handle generation errors
     if (error.message.includes('AI_NoObjectGeneratedError') || 
-        error.message.includes('failed to generate')) {
+        error.message.includes('failed to generate') ||
+        error.message.includes('AI processing failed')) {
       return NextResponse.json(
         {
-          error: AIErrorType.AI_GENERATION_ERROR,
-          message: 'Failed to generate structured QA documentation',
+          error: AIErrorType.AI_PROCESSING_ERROR,
+          message: 'AI processing failed',
           details: 'The AI model was unable to generate a valid document structure',
           requestId,
           errorCode: 'GEN_FAILURE',
@@ -138,8 +161,8 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
       
       return NextResponse.json(
         {
-          error: AIErrorType.RATE_LIMIT_ERROR,
-          message: 'AI service rate limit exceeded',
+          error: AIErrorType.RATE_LIMIT_EXCEEDED,
+          message: 'Too many requests',
           details: 'Please try again in a few moments',
           retryAfter: calculateRetryAfter(error),
           requestId,
@@ -187,11 +210,11 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
         error.message.toLowerCase().includes('permission')) {
       return NextResponse.json(
         {
-          error: AIErrorType.AUTHENTICATION_ERROR,
-          message: 'Authentication failed with AI provider',
+          error: AIErrorType.CONFIGURATION_ERROR,
+          message: 'API key configuration error',
           details: 'The system was unable to authenticate with the AI service',
           requestId,
-          errorCode: 'AUTH_ERROR',
+          errorCode: 'CONFIG_ERROR',
           retryable: false,
           provider: extractProviderFromError(error),
           suggestions: [
@@ -200,7 +223,7 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Contact your administrator to verify API credentials'
           ]
         },
-        { status: 401 }
+        { status: 500 }
       )
     }
 
@@ -313,7 +336,7 @@ export function handleValidationError(issues: any[], requestId?: string): NextRe
   return NextResponse.json(
     {
       error: AIErrorType.VALIDATION_ERROR,
-      message: 'Invalid request payload',
+      message: 'Validation failed',
       details: {
         issues: issues.map(issue => ({
           field: issue.path.join('.'),
@@ -415,4 +438,59 @@ function calculateRetryAfter(error: Error): number {
   }
   
   return 30; // Default 30 seconds
+}
+
+/**
+ * Create error object with optional stack trace
+ */
+export function createErrorObject(
+  errorType: string,
+  message: string,
+  details?: any
+): {
+  error: string;
+  message: string;
+  details?: any;
+  stack?: string;
+} {
+  const errorObj = {
+    error: errorType,
+    message,
+    details
+  };
+
+  // Include stack trace in development
+  if (process.env.NODE_ENV === 'development') {
+    return {
+      ...errorObj,
+      stack: new Error().stack
+    };
+  }
+
+  return errorObj;
+}
+
+/**
+ * Format Zod error for better readability
+ */
+export function formatZodError(zodError: any): {
+  message: string;
+  issues: Array<{
+    field: string;
+    message: string;
+    code: string;
+    received?: any;
+  }>;
+} {
+  const issues = zodError.issues.map((issue: any) => ({
+    field: issue.path.join('.'),
+    message: issue.message,
+    code: issue.code,
+    received: issue.received
+  }));
+
+  return {
+    message: `Validation failed with ${issues.length} error(s)`,
+    issues
+  };
 }

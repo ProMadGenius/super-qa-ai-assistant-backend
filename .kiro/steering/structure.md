@@ -20,7 +20,7 @@ qa-chatcanvas-backend/
 │   └── steering/                 # Project guidance documents
 ├── .env.example                  # Environment template
 ├── .env.local                    # Local environment (gitignored)
-└── Configuration files           # Next.js, TypeScript, Jest, etc.
+└── Configuration files           # Next.js, TypeScript, Vitest, etc.
 ```
 
 ## Code Organization Patterns
@@ -94,8 +94,7 @@ export async function POST(request: NextRequest) {
 - Standalone output for deployment
 - External packages configuration for AI SDK
 
-### Jest (`jest.config.js`)
-- Next.js integration with `next/jest`
+### Vitest (`vitest.config.ts`)
 - Node environment for API testing
 - Path mapping aligned with TypeScript
 

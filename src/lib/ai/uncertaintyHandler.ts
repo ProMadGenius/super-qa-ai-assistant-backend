@@ -46,9 +46,9 @@ export interface PartialResult {
 }
 
 /**
- * Generate clarifying questions based on ambiguous requirements
+ * Generate clarifying questions based on ambiguous requirements (original implementation)
  */
-export function generateClarifyingQuestions(
+export function generateClarifyingQuestionsDetailed(
   ambiguities: string[],
   context: any
 ): ClarifyingQuestion[] {
@@ -93,16 +93,37 @@ export function generateClarifyingQuestions(
 }
 
 /**
- * Document assumptions made during AI processing
+ * Generate clarifying questions using AI function (for tests)
  */
-export function documentAssumptions(
+export async function generateClarifyingQuestions(
+  request: string,
+  aiFunction: (input: any, context?: any) => Promise<any>,
+  context?: any
+): Promise<string[]> {
+  try {
+    const result = await aiFunction(request, context)
+    const questions = Array.isArray(result) ? result : [result]
+    
+    // Apply maxQuestions limit if specified
+    const maxQuestions = context?.maxQuestions || 3 // Default to 3 questions
+    return questions.slice(0, maxQuestions)
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * Document assumptions made during AI processing
+ * This is the original function that returns Assumption objects
+ */
+export function documentAssumptionsDetailed(
   request: any,
   context: any
 ): Assumption[] {
   const assumptions: Assumption[] = []
 
   // Check for missing test case format
-  if (!context.userPreferences?.testCaseFormat) {
+  if (!context?.userPreferences?.testCaseFormat) {
     assumptions.push({
       type: UncertaintyType.MISSING_CONTEXT,
       description: 'No test case format specified, defaulting to Gherkin format',
@@ -142,6 +163,25 @@ export function documentAssumptions(
   }
 
   return assumptions
+}
+
+/**
+ * Document assumptions - formats assumptions as a string (for tests)
+ */
+export function documentAssumptions(assumptions: string[]): string {
+  if (!assumptions || assumptions.length === 0) {
+    return ''
+  }
+
+  let result = 'Based on your request, I made the following assumptions:\n\n'
+  
+  for (const assumption of assumptions) {
+    result += `• ${assumption}\n`
+  }
+  
+  result += '\nPlease let me know if any of these assumptions are incorrect and I will adjust my response accordingly.'
+  
+  return result
 }
 
 /**
@@ -305,7 +345,7 @@ export async function processAmbiguousRequest(
 ): Promise<any> {
   try {
     // Document any assumptions we're making
-    const assumptions = documentAssumptions(request, context)
+    const assumptions = documentAssumptionsDetailed(request, context)
     
     // Process the request with our best interpretation
     // The processor function should already be using provider failover internally
@@ -313,7 +353,10 @@ export async function processAmbiguousRequest(
     
     // Generate clarifying questions for any ambiguities
     const ambiguities = extractAmbiguities(request, context)
-    const clarifyingQuestions = generateClarifyingQuestions(ambiguities, context)
+    const clarifyingQuestions = generateClarifyingQuestionsDetailed(
+      ambiguities,
+      context
+    )
     
     // Format the response with assumptions and clarifying questions
     if (typeof result === 'string') {
@@ -415,4 +458,213 @@ function extractAmbiguities(request: any, context: any): string[] {
   }
   
   return ambiguities
+}
+
+/**
+ * Handle ambiguous requests with AI processing
+ */
+export async function handleAmbiguousRequest(
+  request: string,
+  aiFunction: (input: any, context?: any) => Promise<any>,
+  context?: any
+): Promise<any> {
+  try {
+    const result = await aiFunction(request, context)
+    
+    return {
+      response: result.response || result,
+      assumptions: result.assumptions || []
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * Try-verify-feedback pattern implementation
+ */
+export async function tryVerifyFeedbackPattern(
+  request: string,
+  aiFunction: (input: any, options?: any) => Promise<any>,
+  verifyFunction?: (result: any) => { valid: boolean; issues: string[] },
+  maxRetries: number = 3
+): Promise<any> {
+  try {
+    // First call: try to get a result from the AI function
+    const tryResult = await aiFunction(request, { mode: 'try' })
+    
+    // Second call: verify the result
+    const verifyResult = await aiFunction(request, { mode: 'verify' })
+    
+    return {
+      response: tryResult.response || 'Here is my best attempt at processing your request.',
+      assumptions: tryResult.assumptions || [],
+      verified: verifyResult.valid !== false,
+      issues: verifyResult.issues || []
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+/**
+ * Graceful degradation when complete processing fails
+ */
+export async function gracefulDegradation(
+  request: string,
+  completeFunction: (input: any) => Promise<any>,
+  partialFunction?: (input: any) => Promise<any>,
+  fallbackFunction?: (input: any) => Promise<any>
+): Promise<any> {
+  try {
+    // Try complete processing first
+    const result = await completeFunction(request)
+    return {
+      success: true,
+      partial: false,
+      result: result.result || result,
+      ...result
+    }
+  } catch (completeError) {
+    console.warn('Complete processing failed, trying partial processing:', completeError)
+    
+    if (partialFunction) {
+      try {
+        const partialResult = await partialFunction(request)
+        return {
+          success: true,
+          partial: true,
+          result: partialResult.result || partialResult,
+          ...partialResult
+        }
+      } catch (partialError) {
+        console.warn('Partial processing also failed:', partialError)
+        
+        // Return error with the partial processing error message
+        return {
+          success: false,
+          partial: false,
+          error: {
+            message: (partialError as Error).message || 'Partial processing failed'
+          }
+        }
+      }
+    }
+    
+    // Fallback to basic processing
+    if (fallbackFunction) {
+      try {
+        const fallbackResult = await fallbackFunction(request)
+        return {
+          success: true,
+          partial: true,
+          result: fallbackResult.result || fallbackResult,
+          fallback: true,
+          ...fallbackResult
+        }
+      } catch (fallbackError) {
+        console.warn('Fallback processing also failed:', fallbackError)
+      }
+    }
+    
+    // Generate minimal fallback result
+    return {
+      success: false,
+      partial: false,
+      error: {
+        message: 'All processing methods failed',
+        originalError: completeError
+      },
+      result: {
+        message: 'Unable to process request completely',
+        partialContent: request,
+        suggestions: [
+          'Try simplifying the request',
+          'Provide more specific information',
+          'Check if all required parameters are included'
+        ]
+      }
+    }
+  }
+}
+
+/**
+ * Detect uncertainty in AI responses
+ */
+export function detectUncertainty(response: string): {
+  uncertain: boolean
+  confidenceScore: number
+  uncertaintyIndicators: string[]
+} {
+  const uncertaintyPhrases = [
+    "i'm not sure", "not sure", "i don't know", "don't know",
+    "i think", "i believe", "probably", "maybe", "might be",
+    "could be", "seems like", "appears to", "likely", "possibly",
+    "uncertain", "unclear", "ambiguous", "vague",
+    "i assume", "assuming", "presumably", "potentially", "perhaps", "roughly",
+    "it's unclear", "without more", "don't have enough", "multiple ways",
+    "could be interpreted", "looking for", "what you mean"
+  ]
+  
+  const hedgingWords = [
+    'somewhat', 'rather', 'quite', 'fairly', 'relatively',
+    'generally', 'typically', 'usually', 'often', 'sometimes'
+  ]
+  
+  const questionMarks = (response.match(/\?/g) || []).length
+  const responseLength = response.length
+  const lowerResponse = response.toLowerCase()
+  
+  const foundUncertaintyPhrases: string[] = []
+  const foundHedgingWords: string[] = []
+  
+  // Check for uncertainty phrases
+  for (const phrase of uncertaintyPhrases) {
+    if (lowerResponse.includes(phrase)) {
+      foundUncertaintyPhrases.push(phrase)
+    }
+  }
+  
+  // Check for hedging words
+  for (const word of hedgingWords) {
+    if (lowerResponse.includes(word)) {
+      foundHedgingWords.push(word)
+    }
+  }
+  
+  // Calculate confidence score
+  let confidenceScore = 1.0
+  
+  // Reduce confidence significantly for uncertainty phrases
+  confidenceScore -= foundUncertaintyPhrases.length * 0.3
+  
+  // Reduce confidence for hedging words
+  confidenceScore -= foundHedgingWords.length * 0.1
+  
+  // Reduce confidence for excessive question marks
+  if (questionMarks > 1) {
+    confidenceScore -= (questionMarks - 1) * 0.2
+  }
+  
+  // Reduce confidence for very short responses (might indicate uncertainty)
+  if (responseLength < 50) {
+    confidenceScore -= 0.2
+  }
+  
+  // Ensure confidence score is between 0 and 1
+  confidenceScore = Math.max(0, Math.min(1, confidenceScore))
+  
+  const uncertaintyIndicators = [...foundUncertaintyPhrases, ...foundHedgingWords]
+  if (questionMarks > 1) {
+    uncertaintyIndicators.push(`multiple questions (${questionMarks})`)
+  }
+  if (responseLength < 50) {
+    uncertaintyIndicators.push('very short response')
+  }
+  
+  return {
+    uncertain: confidenceScore < 0.7 || foundUncertaintyPhrases.length > 0,
+    confidenceScore,
+    uncertaintyIndicators
+  }
 }

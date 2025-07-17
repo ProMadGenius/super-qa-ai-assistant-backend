@@ -39,7 +39,7 @@ Several bugs were fixed during the update:
 - Fixed string quote issues in the test files
 - Added missing fields to the createQASuggestion calls
 - Fixed the QA categories in the test files to match the required structure
-- Updated the testing framework from Jest to Vitest to better support ES modules
+- Updated the testing framework to Vitest to better support ES modules
 - Completed the previously unfinished test case in messageTransformer.test.ts for the buildContextAwarePrompt function
 
 ## Testing

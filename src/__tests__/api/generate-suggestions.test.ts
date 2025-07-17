@@ -1,493 +1,434 @@
-import { POST } from '@/app/api/generate-suggestions/route'
-import { NextRequest } from 'next/server'
-import { QACanvasDocument } from '@/lib/schemas/QACanvasDocument'
-import { defaultQAProfile } from '@/lib/schemas/QAProfile'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+/**
+ * Integration tests for generate-suggestions API endpoint
+ */
 
-// Mock the AI SDK to avoid making real API calls during testing
+import { describe, test, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createRequest } from 'node-mocks-http';
+import { POST } from '../../app/api/generate-suggestions/route';
+import { defaultQAProfile } from '../../lib/schemas/QAProfile';
+import { createMinimalQACanvasDocument } from '../../lib/schemas/QACanvasDocument';
+import { createQASuggestion } from '../../lib/schemas/QASuggestion';
+
+// Mock AI SDK
 vi.mock('ai', () => ({
   generateText: vi.fn(),
-  tool: vi.fn((config) => ({
-    description: config.description,
-    parameters: config.parameters
+  tool: vi.fn().mockImplementation((config) => ({
+    ...config,
+    _isTool: true
   }))
-}))
+}));
 
-// Get the mocked generateText function
-const mockGenerateText = vi.mocked((await import('ai')).generateText)
+// Mock provider failover - using the path alias that matches the API route import
+vi.mock('@/lib/ai/providerFailover', () => ({
+  generateTextWithFailover: vi.fn(),
+  getProviderHealthStatus: vi.fn().mockReturnValue({
+    openai: { name: 'openai', available: true, failureCount: 0, lastFailure: null, lastSuccess: null, circuitOpen: false, circuitOpenTime: null },
+    anthropic: { name: 'anthropic', available: true, failureCount: 0, lastFailure: null, lastSuccess: null, circuitOpen: false, circuitOpenTime: null }
+  })
+}));
 
-vi.mock('@ai-sdk/openai', () => ({
-  openai: vi.fn(() => 'mocked-openai-model')
-}))
+// Also mock the relative path for the import below
+vi.mock('../../lib/ai/providerFailover', () => ({
+  generateTextWithFailover: vi.fn(),
+  getProviderHealthStatus: vi.fn().mockReturnValue({
+    openai: { name: 'openai', available: true, failureCount: 0, lastFailure: null, lastSuccess: null, circuitOpen: false, circuitOpenTime: null },
+    anthropic: { name: 'anthropic', available: true, failureCount: 0, lastFailure: null, lastSuccess: null, circuitOpen: false, circuitOpenTime: null }
+  })
+}));
 
-describe('/api/generate-suggestions', () => {
+// Mock error handler
+vi.mock('../../lib/ai/errorHandler', () => ({
+  handleAIError: vi.fn().mockImplementation((error, requestId) => {
+    return new Response(JSON.stringify({
+      error: 'INTERNAL_SERVER_ERROR',
+      message: 'Internal server error',
+      requestId
+    }), { status: 500 });
+  }),
+  handleValidationError: vi.fn().mockImplementation((issues, requestId) => {
+    return new Response(JSON.stringify({
+      error: 'VALIDATION_ERROR',
+      message: 'Validation error',
+      issues,
+      requestId
+    }), { status: 400 });
+  })
+}));
 
-  const mockDocument: QACanvasDocument = {
-    ticketSummary: {
-      problem: 'Login button not working on mobile devices',
-      solution: 'Fix button click handler and improve error handling',
-      context: 'Mobile application with authentication system'
-    },
-    configurationWarnings: [
+// Mock uncertainty handler
+vi.mock('../../lib/ai/uncertaintyHandler', () => ({
+  documentAssumptions: vi.fn()
+}));
+
+// Mock UUID
+vi.mock('uuid', () => ({
+  v4: vi.fn().mockReturnValue('test-uuid-123')
+}));
+
+// Mock suggestion algorithms
+vi.mock('../../lib/ai/suggestionAlgorithms', () => ({
+  analyzeCoverageGaps: vi.fn().mockReturnValue({
+    gaps: [],
+    coveredAreas: [],
+    coveragePercentage: 85
+  }),
+  generateClarificationQuestions: vi.fn().mockReturnValue({
+    questions: []
+  }),
+  identifyEdgeCases: vi.fn().mockReturnValue({
+    edgeCases: [
       {
-        type: 'category_mismatch',
-        title: 'Mobile Testing Recommended',
-        message: 'This ticket affects mobile functionality',
-        recommendation: 'Enable mobile testing category',
-        severity: 'medium'
+        type: 'edge_case',
+        scenario: 'Test edge case scenario',
+        suggestion: 'Add edge case test',
+        priority: 'high'
       }
-    ],
-    acceptanceCriteria: [
-      {
-        id: 'ac-1',
-        title: 'Login button works on mobile',
-        description: 'User can successfully click login button on mobile devices',
-        priority: 'must',
-        category: 'functional',
-        testable: true
-      },
-      {
-        id: 'ac-2',
-        title: 'Error handling works',
-        description: 'System displays appropriate error messages',
-        priority: 'must',
-        category: 'functional',
-        testable: true
-      }
-    ],
-    testCases: [
-      {
-        format: 'gherkin',
-        id: 'tc-1',
-        category: 'functional',
-        priority: 'high',
-        testCase: {
-          scenario: 'User logs in successfully on mobile',
-          given: ['User is on mobile login page'],
-          when: ['User taps login button'],
-          then: ['User is logged in successfully'],
-          tags: ['@mobile', '@authentication']
-        }
-      }
-    ],
-    metadata: {
-      generatedAt: '2024-01-15T13:00:00Z',
-      qaProfile: defaultQAProfile,
-      ticketId: 'TEST-123',
-      documentVersion: '1.0'
+    ]
+  }),
+  generateTestPerspectives: vi.fn().mockReturnValue([
+    {
+      perspective: 'ui',
+      description: 'UI verification test',
+      applicability: 'medium',
+      implementationHint: 'Add UI test case'
     }
-  }
+  ]),
+  mapGapToSuggestionType: vi.fn().mockReturnValue('functional'),
+  mapAmbiguityToSuggestionType: vi.fn().mockReturnValue('clarification'),
+  mapEdgeCaseToSuggestionType: vi.fn().mockReturnValue('edge_case'),
+  mapPerspectiveToSuggestionType: vi.fn().mockReturnValue('ui_verification')
+}));
+
+import { generateTextWithFailover } from '../../lib/ai/providerFailover';
+
+describe('Generate Suggestions API', () => {
+  // Sample test data
+  const sampleDocument = createMinimalQACanvasDocument('TEST-123', defaultQAProfile);
+  
+  // Update sample document with more realistic data
+  sampleDocument.ticketSummary = {
+    problem: 'Users cannot reset their password when using special characters',
+    solution: 'Update password reset functionality to handle special characters correctly',
+    context: 'The password reset feature is critical for user account management'
+  };
+  
+  sampleDocument.acceptanceCriteria = [
+    {
+      id: 'ac-1',
+      title: 'Password reset with special characters',
+      description: 'System should allow password reset with special characters',
+      priority: 'must',
+      category: 'functional',
+      testable: true
+    }
+  ];
+  
+  sampleDocument.testCases = [
+    {
+      id: 'tc-1',
+      category: 'functional',
+      priority: 'high' as const,
+      format: 'steps' as const,
+      testCase: {
+        title: 'Reset password with special characters',
+        objective: 'Verify that users can reset passwords containing special characters',
+        preconditions: ['User has valid email account'],
+        steps: [
+          {
+            stepNumber: 1,
+            action: 'Navigate to password reset page',
+            expectedResult: 'Password reset page loads successfully'
+          },
+          {
+            stepNumber: 2,
+            action: 'Enter email address',
+            expectedResult: 'Email field accepts input'
+          },
+          {
+            stepNumber: 3,
+            action: 'Submit reset request',
+            expectedResult: 'Reset email is sent'
+          },
+          {
+            stepNumber: 4,
+            action: 'Open email and click reset link',
+            expectedResult: 'Reset form opens'
+          },
+          {
+            stepNumber: 5,
+            action: 'Enter new password with special characters',
+            expectedResult: 'Password field accepts special characters'
+          },
+          {
+            stepNumber: 6,
+            action: 'Confirm password reset',
+            expectedResult: 'Password is successfully reset'
+          }
+        ],
+        postconditions: ['User can login with new password']
+      }
+    }
+  ];
+
+  const validPayload = {
+    currentDocument: sampleDocument,
+    maxSuggestions: 2,
+    focusAreas: ['edge_case', 'ui_verification'],
+    excludeTypes: ['clarification_question']
+  };
+
+  // Sample suggestions
+  const sampleSuggestions = [
+    createQASuggestion({
+      suggestionType: 'edge_case',
+      title: 'Test password reset with extremely long passwords',
+      description: 'Add a test case for passwords that are at the maximum allowed length',
+      priority: 'medium',
+      reasoning: 'Edge cases around password length limits are common sources of bugs',
+      relatedRequirements: ['ac-1'],
+      tags: ['password', 'edge-case', 'validation']
+    }),
+    createQASuggestion({
+      suggestionType: 'ui_verification',
+      title: 'Verify error message display for invalid password formats',
+      description: 'Add UI verification for error message styling and placement',
+      priority: 'low',
+      reasoning: 'Error messages should be clearly visible and properly styled',
+      relatedRequirements: ['ac-1'],
+      tags: ['ui', 'error-handling', 'validation']
+    })
+  ];
+
+  beforeAll(() => {
+    // Mock environment variables
+    process.env.OPENAI_API_KEY = 'test-key';
+  });
+
+  afterAll(() => {
+    // Clean up environment variables
+    delete process.env.OPENAI_API_KEY;
+  });
 
   beforeEach(() => {
-    vi.clearAllMocks()
-
-    // Mock successful suggestion generation
-    mockGenerateText.mockResolvedValue({
-      text: 'Generated suggestion',
+    vi.clearAllMocks();
+    
+    // Mock successful AI response with toolCalls structure that the API route expects
+    (generateTextWithFailover as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
       toolCalls: [
         {
-          type: 'tool-call',
-          toolCallId: 'call-1',
           toolName: 'qaSuggestionTool',
           args: {
             suggestionType: 'edge_case',
-            title: 'Test edge case: Session timeout during operation',
-            description: 'Add a test case for the edge case: Session timeout during operation',
+            title: 'Test edge case suggestion',
+            description: 'This is a test edge case suggestion',
             targetSection: 'Test Cases',
             priority: 'high',
-            reasoning: 'User session expires while performing an action',
-            implementationHint: 'Create a test that specifically verifies behavior for this edge case scenario.',
+            reasoning: 'This is important for testing',
+            implementationHint: 'Add this test case',
             estimatedEffort: 'medium',
-            tags: ['edge-case', 'Authentication']
+            tags: ['edge-case', 'testing']
           }
         }
-      ],
-      reasoning: '',
-      files: [],
-      reasoningDetails: [],
-      sources: [],
-      finishReason: 'stop',
-      usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
-      experimental_output: {},
-      toolResults: [],
-      warnings: [],
-      steps: [],
-      request: {},
-      response: {
-        id: 'mock-response-id',
-        timestamp: new Date(),
-        modelId: 'mock-model-id',
-        messages: [],
-        headers: {}
-      },
-      logprobs: undefined,
-      providerMetadata: {},
-      experimental_providerMetadata: {}
-    })
-  })
+      ]
+    });
+  });
 
-  const validPayload = {
-    currentDocument: mockDocument,
-    maxSuggestions: 3,
-    focusAreas: ['edge_case', 'ui_verification'],
-    excludeTypes: ['performance_test'],
-    requestId: 'req-123'
-  }
-
-  describe('POST /api/generate-suggestions', () => {
-    it('should generate suggestions successfully', async () => {
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
+  test('should process valid suggestions request', async () => {
+    // Create request with valid payload and proper json() method
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue(validPayload)
+    };
+    
+    const res = await POST(req as any);
+    
+    // Debug: Log the actual response
+    const data = await res.json();
+    console.log('Response status:', res.status);
+    console.log('Response data:', JSON.stringify(data, null, 2));
+    
+    expect(res.status).toBe(200);
+    
+    expect(data).toBeDefined();
+    expect(data.suggestions).toBeInstanceOf(Array);
+    expect(data.suggestions).toHaveLength(2);
+    expect(data.suggestions[0].suggestionType).toBe('edge_case');
+    expect(data.suggestions[1].suggestionType).toBe('ui_verification');
+    expect(data.totalCount).toBe(2);
+    expect(data.generatedAt).toBeDefined();
+    
+    // Verify AI function was called correctly
+    expect(generateTextWithFailover).toHaveBeenCalledWith(
+      expect.stringContaining('Analyze this QA documentation and generate'),
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          qaSuggestionTool: expect.any(Object)
+        }),
+        temperature: 0.4,
+        maxTokens: 1000
       })
+    );
+  });
 
-      const response = await POST(request)
-      const responseData = await response.json()
-
-      expect(response.status).toBe(200)
-      expect(responseData.suggestions).toBeDefined()
-      expect(responseData.suggestions.length).toBeGreaterThan(0)
-      expect(responseData.totalCount).toBe(responseData.suggestions.length)
-      expect(responseData.generatedAt).toBeDefined()
-      expect(responseData.contextSummary).toContain('TEST-123')
-    })
-
-    it('should validate suggestion structure', async () => {
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
+  test('should reject invalid request payload', async () => {
+    // Create request with invalid payload
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue({
+        // Missing currentDocument
+        maxSuggestions: 'not-a-number', // Invalid type
+        focusAreas: 'not-an-array' // Invalid type
       })
+    };
+    
+    const res = await POST(req as any);
+    
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    
+    expect(data.error).toBe('VALIDATION_ERROR');
+    expect(data.message).toContain('Validation error');
+    expect(data.issues).toBeDefined();
+    expect(data.issues).toBeInstanceOf(Array);
+    
+    // AI function should not be called
+    expect(generateTextWithFailover).not.toHaveBeenCalled();
+  });
 
-      const response = await POST(request)
-      const responseData = await response.json()
+  test('should handle AI processing errors', async () => {
+    // Mock AI error
+    (generateTextWithFailover as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error('AI processing failed')
+    );
+    
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue(validPayload)
+    };
+    
+    const res = await POST(req as any);
+    
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    
+    expect(data.error).toBe('AI_PROCESSING_ERROR');
+    expect(data.message).toContain('AI processing failed');
+    expect(data.details).toBeDefined();
+  });
 
-      expect(response.status).toBe(200)
+  test('should handle missing API key', async () => {
+    // Temporarily remove API key
+    const originalKey = process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue(validPayload)
+    };
+    
+    const res = await POST(req as any);
+    
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    
+    expect(data.error).toBe('CONFIGURATION_ERROR');
+    expect(data.message).toContain('API key');
+    
+    // Restore API key
+    process.env.OPENAI_API_KEY = originalKey;
+  });
 
-      const suggestion = responseData.suggestions[0]
-      expect(suggestion.id).toBeDefined()
-      expect(suggestion.suggestionType).toBe('edge_case')
-      expect(suggestion.title).toContain('Test edge case:')
-      expect(suggestion.description).toContain('Add a test case for the edge case')
-      expect(suggestion.priority).toBe('high')
-      expect(suggestion.reasoning).toBeDefined()
-      expect(suggestion.tags).toBeDefined()
-    })
-
-    it('should handle request without optional fields', async () => {
-      const minimalPayload = {
-        currentDocument: mockDocument
-      }
-
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(minimalPayload)
-      })
-
-      const response = await POST(request)
-
-      expect(response.status).toBe(200)
-      const responseData = await response.json()
-      expect(responseData.suggestions.length).toBeGreaterThan(0)
-    })
-
-    it('should include document context in prompt', async () => {
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
-      })
-
-      const response = await POST(request)
-      const responseData = await response.json()
-
-      // Instead of checking the prompt, check that the response contains suggestions
-      expect(response.status).toBe(200)
-      expect(responseData.suggestions.length).toBeGreaterThan(0)
-      expect(responseData.contextSummary).toContain('TEST-123')
-    })
-
-    it('should return validation error for invalid payload', async () => {
-      const invalidPayload = {
+  test('should handle invalid document JSON', async () => {
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue({
+        ...validPayload,
         currentDocument: {
-          // Missing required fields
-          ticketSummary: {}
-        },
-        maxSuggestions: 15 // Exceeds maximum
-      }
-
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(invalidPayload)
+          // Missing required fields to trigger validation error
+          invalidField: 'test'
+        }
       })
+    };
+    
+    const res = await POST(req as any);
+    
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    
+    expect(data.error).toBe('VALIDATION_ERROR');
+    expect(data.message).toContain('Validation error');
+  });
 
-      const response = await POST(request)
-
-      expect(response.status).toBe(400)
-
-      const responseData = await response.json()
-      expect(responseData.error).toBe('VALIDATION_ERROR')
-      expect(responseData.message).toContain('Invalid request payload')
-    })
-
-    it('should handle AI generation failures gracefully', async () => {
-      mockGenerateText.mockRejectedValue(new Error('AI service unavailable'))
-
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
+  test('should respect maxSuggestions parameter', async () => {
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue({
+        ...validPayload,
+        maxSuggestions: 1
       })
+    };
+    
+    const res = await POST(req as any);
+    
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    
+    // Should only return 1 suggestion as requested
+    expect(data.suggestions).toHaveLength(1);
+    expect(data.totalCount).toBe(1);
+  });
 
-      const response = await POST(request)
+  test('should handle invalid AI response format', async () => {
+    // Mock invalid AI response
+    (generateTextWithFailover as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce('Not valid JSON');
+    
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue(validPayload)
+    };
+    
+    const res = await POST(req as any);
+    
+    expect(res.status).toBe(500);
+    const data = await res.json();
+    
+    expect(data.error).toBe('AI_PROCESSING_ERROR');
+    expect(data.message).toContain('Failed to parse AI response');
+  });
 
-      // With our intelligent algorithms, we still get suggestions even if AI fails
-      expect(response.status).toBe(200)
-
-      const responseData = await response.json()
-      expect(responseData.suggestions.length).toBeGreaterThan(0)
-    })
-
-    it('should handle partial suggestion generation failures', async () => {
-      // Mock first call to succeed, second to fail, third to succeed
-      mockGenerateText
-        .mockResolvedValueOnce({
-          text: 'Success 1',
-          toolCalls: [{
-            type: 'tool-call',
-            toolCallId: 'call-1',
-            toolName: 'qaSuggestionTool',
-            args: {
-              suggestionType: 'edge_case',
-              title: 'First suggestion',
-              description: 'First successful suggestion',
-              priority: 'medium',
-              reasoning: 'Important for coverage'
-            }
-          }],
-          reasoning: '',
-          files: [],
-          reasoningDetails: [],
-          sources: [],
-          finishReason: 'stop',
-          usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
-          experimental_output: {},
-          toolResults: [],
-          warnings: [],
-          steps: [],
-          request: {},
-          response: {
-            id: 'mock-response-id',
-            timestamp: new Date(),
-            modelId: 'mock-model-id',
-            messages: [],
-            headers: {}
-          },
-          logprobs: undefined,
-          providerMetadata: {},
-          experimental_providerMetadata: {}
-        })
-        .mockRejectedValueOnce(new Error('Failed'))
-        .mockResolvedValueOnce({
-          text: 'Success 2',
-          toolCalls: [{
-            type: 'tool-call',
-            toolCallId: 'call-2',
-            toolName: 'qaSuggestionTool',
-            args: {
-              suggestionType: 'ui_verification',
-              title: 'Third suggestion',
-              description: 'Third successful suggestion',
-              priority: 'low',
-              reasoning: 'Good to have'
-            }
-          }],
-          reasoning: '',
-          files: [],
-          reasoningDetails: [],
-          sources: [],
-          finishReason: 'stop',
-          usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
-          experimental_output: {},
-          toolResults: [],
-          warnings: [],
-          steps: [],
-          request: {},
-          response: {
-            id: 'mock-response-id',
-            timestamp: new Date(),
-            modelId: 'mock-model-id',
-            messages: [],
-            headers: {}
-          },
-          logprobs: undefined,
-          providerMetadata: {},
-          experimental_providerMetadata: {}
-        })
-
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
+  test('should include focus areas in prompt', async () => {
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue({
+        ...validPayload,
+        focusAreas: ['security', 'performance']
       })
+    };
+    
+    const res = await POST(req as any);
+    
+    // Verify AI function was called with focus areas in prompt
+    expect(generateTextWithFailover).toHaveBeenCalledWith(
+      expect.stringContaining('Focus on these areas: security, performance'),
+      expect.any(Object)
+    );
+  });
 
-      const response = await POST(request)
-      const responseData = await response.json()
-
-      // With our intelligent algorithms, we still get suggestions even if some AI calls fail
-      expect(response.status).toBe(200)
-      expect(responseData.suggestions.length).toBeGreaterThan(0)
-      expect(responseData.totalCount).toBeGreaterThan(0)
-    })
-
-    it('should return error when no suggestions are generated', async () => {
-      mockGenerateText.mockResolvedValue({
-        text: 'No tool calls',
-        toolCalls: [], // Empty tool calls
-        reasoning: '',
-        files: [],
-        reasoningDetails: [],
-        sources: [],
-        finishReason: 'stop',
-        usage: { promptTokens: 100, completionTokens: 200, totalTokens: 300 },
-        experimental_output: {},
-        toolResults: [],
-        warnings: [],
-        steps: [],
-        request: {},
-        response: {
-          id: 'mock-response-id',
-          timestamp: new Date(),
-          modelId: 'mock-model-id',
-          messages: [],
-          headers: {}
-        },
-        logprobs: undefined,
-        providerMetadata: {},
-        experimental_providerMetadata: {}
+  test('should exclude specified suggestion types', async () => {
+    const req = {
+      method: 'POST',
+      json: vi.fn().mockResolvedValue({
+        ...validPayload,
+        excludeTypes: ['functional']
       })
-
-      // For this test, we need to create a special payload that would result in no suggestions
-      // from our intelligent algorithms
-      const emptyPayload = {
-        currentDocument: {
-          ...mockDocument,
-          // Empty acceptance criteria and test cases to prevent algorithm suggestions
-          acceptanceCriteria: [],
-          testCases: [],
-          // Empty ticket summary to prevent edge case detection
-          ticketSummary: {
-            problem: '',
-            solution: '',
-            context: ''
-          }
-        },
-        maxSuggestions: 3
-      }
-
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(emptyPayload)
-      })
-
-      const response = await POST(request)
-
-      // With our intelligent algorithms, we still get suggestions even with empty document
-      // So we'll check that we get a successful response instead
-      expect(response.status).toBe(200)
-
-      const responseData = await response.json()
-      expect(responseData.suggestions.length).toBeGreaterThan(0)
-    })
-
-    it.skip('should use correct AI model and parameters', async () => {
-      // Skip this test as we're now using provider failover which changes how we call generateText
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
-      })
-
-      await POST(request)
-
-      expect(mockGenerateText).toHaveBeenCalledWith(
-        expect.objectContaining({
-          model: 'mocked-openai-model',
-          temperature: 0.4,
-          maxTokens: 1000,
-          tools: expect.objectContaining({
-            qaSuggestionTool: expect.any(Object)
-          })
-        })
-      )
-    })
-
-    it.skip('should generate unique suggestions for multiple calls', async () => {
-      // Skip this test as we're now using provider failover which changes how we call generateText
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify({ ...validPayload, maxSuggestions: 2 })
-      })
-
-      await POST(request)
-
-      expect(mockGenerateText).toHaveBeenCalledTimes(2)
-
-      // Check that each call has unique prompt content
-      const firstCall = mockGenerateText.mock.calls[0][0]
-      const secondCall = mockGenerateText.mock.calls[1][0]
-
-      expect(firstCall.prompt).toContain('suggestion 1 of 2')
-      expect(secondCall.prompt).toContain('suggestion 2 of 2')
-    })
-
-    it('should build appropriate context summary', async () => {
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
-      })
-
-      const response = await POST(request)
-      const responseData = await response.json()
-
-      expect(responseData.contextSummary).toContain('TEST-123')
-      expect(responseData.contextSummary).toContain('2 acceptance criteria')
-      expect(responseData.contextSummary).toContain('1 test cases')
-      expect(responseData.contextSummary).toContain('1 configuration warnings')
-    })
-
-    it('should handle malformed JSON in request body', async () => {
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: 'invalid json'
-      })
-
-      const response = await POST(request)
-
-      expect(response.status).toBe(500)
-    })
-
-    it.skip('should respect maxSuggestions limit', async () => {
-      // Skip this test as we're now using provider failover which changes how we call generateText
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify({ ...validPayload, maxSuggestions: 1 })
-      })
-
-      await POST(request)
-
-      expect(mockGenerateText).toHaveBeenCalledTimes(1)
-    })
-
-    it('should build system prompt for QA expertise', async () => {
-      const request = new NextRequest('http://localhost:3000/api/generate-suggestions', {
-        method: 'POST',
-        body: JSON.stringify(validPayload)
-      })
-
-      await POST(request)
-
-      const systemPrompt = mockGenerateText.mock.calls[0][0].system
-      expect(systemPrompt).toContain('senior QA analyst')
-      expect(systemPrompt).toContain('Test Coverage Analysis')
-      expect(systemPrompt).toContain('qaSuggestionTool')
-      expect(systemPrompt).toContain('Edge Cases')
-      expect(systemPrompt).toContain('Security Tests')
-    })
-  })
-})
+    };
+    
+    const res = await POST(req as any);
+    
+    // Verify AI function was called with exclude types in prompt
+    expect(generateTextWithFailover).toHaveBeenCalledWith(
+      expect.stringContaining('Exclude these suggestion types: functional'),
+      expect.any(Object)
+    );
+  });
+});

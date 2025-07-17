@@ -323,7 +323,7 @@ When the AI encounters ambiguous requests:
 
 ### Testing Tools and Framework
 
-- **Jest**: Unit and integration testing
+- **Vitest**: Unit and integration testing
 - **Supertest**: API endpoint testing
 - **MSW (Mock Service Worker)**: AI provider mocking
 - **PM2 Testing**: Local PM2 environment for deployment testing

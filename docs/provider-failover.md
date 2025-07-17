@@ -1,127 +1,176 @@
-# Provider Failover Implementation
+# Provider Failover System
 
-This document describes the provider failover mechanism implemented in the QA ChatCanvas Backend API.
+This document describes the provider failover system implemented in the QA ChatCanvas API. The system ensures high availability and reliability by automatically switching between AI providers when one fails.
 
 ## Overview
 
-The provider failover system provides resilience against AI provider failures by implementing:
+The provider failover system implements the circuit breaker pattern to detect and handle failures in AI provider APIs. It provides automatic retry and failover between OpenAI and Anthropic, ensuring that the application remains operational even when one provider experiences issues.
 
-1. **Circuit Breaker Pattern**: Automatically detects failing providers and temporarily disables them
-2. **Retry Logic**: Implements exponential backoff for transient errors
-3. **Provider Failover**: Switches between OpenAI and Anthropic when one provider fails
-4. **Health Monitoring**: Tracks provider health status and failure rates
+## Key Components
 
-## Architecture
+### 1. Circuit Breaker Pattern
 
-The failover system is implemented in `src/lib/ai/providerFailover.ts` and provides three main functions:
+The circuit breaker pattern prevents cascading failures by detecting when a service is unavailable and temporarily stopping requests to that service. The implementation includes:
 
-- `generateObjectWithFailover`: For structured object generation with schema validation
-- `generateTextWithFailover`: For text generation with optional tool calls
-- `streamTextWithFailover`: For streaming text responses
+- **Failure Counting**: Tracks consecutive failures for each provider
+- **Circuit Opening**: When failures exceed a threshold, the circuit "opens" and stops sending requests
+- **Automatic Reset**: Circuits automatically reset after a configurable timeout period
+- **Manual Reset**: Circuits can be manually reset through the API
+
+### 2. Provider Management
+
+The system manages multiple AI providers:
+
+- **Primary Provider**: OpenAI (default)
+- **Secondary Provider**: Anthropic (fallback)
+- **Provider Health Tracking**: Monitors the health status of each provider
+- **Provider Selection**: Selects available providers based on circuit status and priority
+
+### 3. Retry Logic
+
+The retry mechanism handles transient failures:
+
+- **Exponential Backoff**: Increases delay between retries
+- **Configurable Retries**: Maximum retry attempts can be configured
+- **Cross-Provider Retries**: Attempts with all available providers before giving up
 
 ## Configuration
 
-The failover system can be configured through environment variables:
+The failover system is configured through environment variables:
 
 ```
-# Provider Models
-OPENAI_MODEL=gpt-4o                  # Default model for OpenAI
-ANTHROPIC_MODEL=claude-3-opus-20240229  # Default model for Anthropic
-
 # Circuit Breaker Configuration
-CIRCUIT_BREAKER_THRESHOLD=5          # Number of failures before circuit opens
-CIRCUIT_BREAKER_RESET_TIMEOUT=60000  # Time in ms before circuit resets (1 minute)
+CIRCUIT_BREAKER_THRESHOLD=5      # Number of failures before opening circuit
+CIRCUIT_BREAKER_RESET_TIMEOUT=60000  # Time in ms before auto-reset (1 minute)
 
 # Retry Configuration
-MAX_RETRIES=3                        # Maximum retry attempts
-RETRY_DELAY_MS=1000                  # Initial delay between retries in ms
+MAX_RETRIES=3                    # Maximum retry attempts
+RETRY_DELAY_MS=1000              # Initial delay between retries in ms
+
+# Provider Configuration
+OPENAI_MODEL=gpt-4o              # OpenAI model to use
+ANTHROPIC_MODEL=claude-3-opus-20240229  # Anthropic model to use
+OPENAI_TIMEOUT=60000             # Timeout for OpenAI requests in ms
+ANTHROPIC_TIMEOUT=60000          # Timeout for Anthropic requests in ms
 ```
 
-## Circuit Breaker Pattern
+## Implementation Details
 
-The circuit breaker pattern prevents cascading failures by temporarily disabling providers that are experiencing issues:
+### Provider Status Tracking
 
-1. **Closed State**: Normal operation, requests are sent to the provider
-2. **Open State**: After `CIRCUIT_BREAKER_THRESHOLD` failures, the provider is temporarily disabled
-3. **Half-Open State**: After `CIRCUIT_BREAKER_RESET_TIMEOUT` milliseconds, the circuit attempts to reset
+Each provider's status includes:
 
-## Provider Priority
+- **Available**: Whether the provider is configured and available
+- **Failure Count**: Number of consecutive failures
+- **Last Failure**: Timestamp of the last failure
+- **Last Success**: Timestamp of the last successful request
+- **Circuit Open**: Whether the circuit breaker is open
+- **Circuit Open Time**: When the circuit was opened
 
-Providers are assigned a weight that determines their priority:
+### Failover Process
 
-- OpenAI: Weight 10 (primary provider)
-- Anthropic: Weight 5 (secondary provider)
+1. **Request Initiation**: Application makes a request to the AI provider
+2. **Provider Selection**: System selects the highest priority available provider
+3. **Request Execution**: System sends the request to the selected provider
+4. **Success Handling**: On success, record success and return the result
+5. **Failure Handling**:
+   - Record failure for the provider
+   - Increment failure count
+   - If failure count exceeds threshold, open circuit
+   - Try next available provider
+   - If all providers fail, retry with exponential backoff
+   - If all retries fail, return error
 
-The system will always try providers in order of their weight (highest first).
+### API Functions
+
+The system provides three main functions for AI interactions:
+
+1. **generateObjectWithFailover**: For structured object generation
+2. **generateTextWithFailover**: For text generation
+3. **streamTextWithFailover**: For streaming text responses
+
+Each function handles failover automatically and maintains the same interface as the Vercel AI SDK functions.
+
+## Monitoring and Management
+
+### Health Status API
+
+The system provides a function to check the health status of all providers:
+
+```typescript
+getProviderHealthStatus(): Record<string, ProviderStatus>
+```
+
+This returns the current status of each provider, including circuit state and failure counts.
+
+### Circuit Reset API
+
+The system provides functions to reset circuit breakers:
+
+```typescript
+resetCircuitBreaker(providerName: string): boolean
+resetAllCircuitBreakers(): void
+```
+
+These can be used to manually reset circuits after addressing provider issues.
 
 ## Error Handling
 
-The failover system handles various error types:
+The system categorizes errors to determine if they are retryable:
 
-- **Rate Limiting**: Detected and tracked for circuit breaker decisions
-- **Authentication Errors**: Tracked but not retried (requires configuration fix)
-- **Timeout Errors**: Retried with exponential backoff
-- **Provider-Specific Errors**: Tracked and used for failover decisions
+- **Network Errors**: Retryable
+- **Timeout Errors**: Retryable
+- **Server Errors (5xx)**: Retryable
+- **Rate Limit Errors (429)**: Retryable
+- **Validation Errors (400)**: Non-retryable
+- **Authentication Errors (401)**: Non-retryable
+- **Not Found Errors (404)**: Non-retryable
 
-## Monitoring
+## Testing Considerations
 
-Provider health status can be monitored using the `getProviderHealthStatus()` function, which returns:
+The system includes special handling for test environments:
+
+- In test environments, the system bypasses the normal failover logic
+- This allows tests to mock AI provider responses without triggering failover
+- Test environment is detected by checking `process.env.NODE_ENV === 'test'`
+
+## Best Practices
+
+1. **Monitor Provider Health**: Regularly check provider health status
+2. **Configure Appropriate Thresholds**: Adjust circuit breaker thresholds based on provider reliability
+3. **Set Reasonable Timeouts**: Configure timeouts based on expected response times
+4. **Handle Graceful Degradation**: Implement fallback behavior when all providers fail
+5. **Log Failover Events**: Log when failover occurs for monitoring and debugging
+
+## Example Usage
 
 ```typescript
-{
-  openai: {
-    name: 'openai',
-    available: boolean,
-    failureCount: number,
-    lastFailure: Date | null,
-    lastSuccess: Date | null,
-    circuitOpen: boolean,
-    circuitOpenTime: Date | null
-  },
-  anthropic: {
-    // Same structure as above
+import { generateObjectWithFailover } from '../lib/ai/providerFailover';
+import { qaCanvasDocumentSchema } from '../lib/schemas/QACanvasDocument';
+
+// Generate a QA document with automatic failover
+const document = await generateObjectWithFailover(
+  qaCanvasDocumentSchema,
+  'Generate QA documentation for this ticket',
+  {
+    system: 'You are a QA analyst assistant',
+    temperature: 0.7
   }
-}
+);
 ```
 
-## Manual Control
+## Limitations and Future Improvements
 
-The system provides functions for manual control:
+1. **Provider-Specific Features**: Some provider-specific features may not be available when using failover
+2. **Response Consistency**: Different providers may generate slightly different responses
+3. **Cost Management**: No automatic cost optimization between providers
+4. **Health Probing**: No proactive health checks (only reactive to failures)
+5. **Persistent Circuit State**: Circuit state is lost on application restart
 
-- `resetCircuitBreaker(providerName)`: Reset the circuit breaker for a specific provider
-- `resetAllCircuitBreakers()`: Reset all circuit breakers
+Future improvements could include:
 
-## Integration with Error Handler
-
-The provider failover system integrates with the error handling system in `src/lib/ai/errorHandler.ts` to provide detailed error responses with provider status information.
-
-## Usage Example
-
-```typescript
-import { generateObjectWithFailover } from '@/lib/ai/providerFailover';
-
-// Define the expected return type for your schema
-interface MyGeneratedResult {
-  object: any;
-  [key: string]: any;
-}
-
-// Generate a structured object with failover
-try {
-  const result = await generateObjectWithFailover<MyGeneratedResult>(
-    mySchema,
-    prompt,
-    {
-      system: systemPrompt,
-      temperature: 0.3,
-      maxTokens: 4000
-    }
-  );
-  
-  // Use the generated object
-  const generatedDocument = result.object;
-} catch (error) {
-  // Handle errors after all providers and retries have failed
-  console.error('All providers failed:', error);
-}
-```
+1. **Persistent Circuit State**: Store circuit state in a database
+2. **Proactive Health Checks**: Periodically check provider health
+3. **Cost-Based Routing**: Route requests based on cost and quota usage
+4. **Response Quality Monitoring**: Monitor and compare response quality between providers
+5. **Regional Failover**: Support for region-specific provider endpoints
