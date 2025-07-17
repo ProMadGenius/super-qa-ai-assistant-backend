@@ -8,7 +8,7 @@
   - Set up basic project structure (lib, schemas, api directories)
   - _Requirements: 1.1, 6.1_
 
-- [ ] 2. Define data schemas and validation
+- [x] 2. Define data schemas and validation
 - [x] 2.1 Create core data schemas with Zod
 
   - Implement QAProfile schema with qaCategories and testCaseFormat validation

@@ -81,6 +81,7 @@ interface RetryConfig {
 // Provider configuration
 interface ProviderConfig {
     provider: AIProvider;
+    name: string; // Explicit name for provider status tracking
     model: string;
     timeout: number;
     weight: number; // Priority weight (higher = more preferred)
@@ -121,18 +122,21 @@ const defaultRetryConfig: RetryConfig = {
 };
 
 // Provider configurations
+// Testing AI SDK v5 compatibility with newer models
 const providers: ProviderConfig[] = [
     {
         provider: openai,
-        model: process.env.OPENAI_MODEL || 'gpt-4o',
+        name: 'openai', // Explicit name for provider status tracking
+        model: process.env.OPENAI_MODEL || 'gpt-4.1', // AI SDK v5 compatible syntax
         timeout: Number(process.env.OPENAI_TIMEOUT) || 60000,
         weight: 10 // Primary provider
     },
     {
-        provider: anthropic,
-        model: process.env.ANTHROPIC_MODEL || 'claude-3-opus-20240229',
-        timeout: Number(process.env.ANTHROPIC_TIMEOUT) || 60000,
-        weight: 5 // Secondary provider
+         provider: anthropic,
+         name: 'anthropic', // Explicit name for provider status tracking
+         model: process.env.ANTHROPIC_MODEL || 'claude-3-7-sonnet-20250219',
+         timeout: Number(process.env.ANTHROPIC_TIMEOUT) || 60000,
+         weight: 5 // Secondary provider
     }
 ];
 
@@ -210,7 +214,7 @@ function getAvailableProviders(): ProviderConfig[] {
 
     // Filter available providers
     return providers.filter(p => {
-        const status = providerStatus[p.provider.name];
+        const status = providerStatus[p.name];
         return status && !status.circuitOpen;
     }).sort((a, b) => b.weight - a.weight); // Sort by weight (highest first)
 }
@@ -306,16 +310,19 @@ export async function generateObjectWithFailover<T>(
     options?: Partial<GenerateObjectOptions>
 ): Promise<T> {
     return executeWithRetryAndFailover(async (provider) => {
+        // In AI SDK v5, create the model using the provider's chat method
+        const model = provider.name === 'openai' 
+            ? openai(provider.model)
+            : anthropic(provider.model);
+        
         const result = await generateObject({
-            model: provider.model as any, // Type assertion to bypass type checking
-            provider: provider.provider,
+            model: model as any, // Type assertion for AI SDK v5 compatibility
             schema,
             prompt,
             ...options,
             maxTokens: options?.maxTokens || 4000,
             temperature: options?.temperature || 0.7
-            // timeout is handled by the AI SDK internally
-        });
+        } as any); // Type assertion for AI SDK v5 compatibility
 
         return result as T;
     });
@@ -329,15 +336,18 @@ export async function generateTextWithFailover(
     options?: Partial<GenerateTextOptions>
 ): Promise<GenerateTextResult<ToolSet, any>> {
     return executeWithRetryAndFailover(async (provider) => {
+        // In AI SDK v5, create the model using the provider's chat method
+        const model = provider.name === 'openai' 
+            ? openai(provider.model)
+            : anthropic(provider.model);
+        
         const result = await generateText({
-            model: provider.model as any, // Type assertion to bypass type checking
-            provider: provider.provider,
+            model: model as any, // Type assertion for AI SDK v5 compatibility
             prompt,
             ...options,
             maxTokens: options?.maxTokens || 2000,
             temperature: options?.temperature || 0.7
-            // timeout is handled by the AI SDK internally
-        });
+        } as any); // Type assertion for AI SDK v5 compatibility
 
         return result;
     });
@@ -351,15 +361,18 @@ export async function streamTextWithFailover(
     options?: Partial<StreamTextOptions>
 ): Promise<StreamTextResult<ToolSet, any>> {
     return executeWithRetryAndFailover(async (provider) => {
+        // In AI SDK v5, create the model using the provider's chat method
+        const model = provider.name === 'openai' 
+            ? openai(provider.model)
+            : anthropic(provider.model);
+        
         const result = streamText({
-            model: provider.model as any, // Type assertion to bypass type checking
-            provider: provider.provider,
+            model: model as any, // Type assertion for AI SDK v5 compatibility
             prompt,
             ...options,
             maxTokens: options?.maxTokens || 2000,
             temperature: options?.temperature || 0.7
-            // timeout is handled by the AI SDK internally
-        });
+        } as any); // Type assertion for AI SDK v5 compatibility
 
         return result;
     });
