@@ -5,6 +5,8 @@
 
 import { openai } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
+import { createModelWithHelicone, logHeliconeEvent } from './heliconeWrapper';
+import { logHeliconeEvent as logEvent, isHeliconeEnabled } from './heliconeMiddleware';
 import { generateObject, generateText, streamText } from 'ai';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -288,14 +290,49 @@ async function executeWithRetryAndFailover<T>(
             }
 
             console.log(`Using provider ${primaryProviderConfig.name} with model ${primaryProviderConfig.model}`);
+            
+            const modelInstance = createModelWithHelicone(
+                primaryProviderConfig.name as 'openai' | 'anthropic',
+                primaryProviderConfig.model
+            );
+            
+            // Log Helicone event for provider selection
+            if (isHeliconeEnabled()) {
+                await logEvent('provider_selected', {
+                    provider: primaryProviderConfig.name,
+                    model: primaryProviderConfig.model,
+                    failover_disabled: true,
+                    primary_provider: primaryProviderName
+                });
+            }
+            
             const result = await operation(primaryProviderConfig);
 
             // Record success
             recordSuccess(primaryProviderConfig.name);
+            
+            // Log Helicone success event
+            if (isHeliconeEnabled()) {
+                await logEvent('ai_request_success', {
+                    provider: primaryProviderConfig.name,
+                    model: primaryProviderConfig.model,
+                    failover_disabled: true
+                });
+            }
 
             return result;
         } catch (error) {
             console.error(`Error with primary provider:`, error);
+            
+            // Log Helicone error event
+            if (isHeliconeEnabled()) {
+                await logEvent('ai_request_error', {
+                    provider: primaryProviderName,
+                    model: providers.find(p => p.name === primaryProviderName)?.model || 'unknown',
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    failover_disabled: true
+                });
+            }
 
             // Record failure
             recordFailure('openai');
@@ -358,10 +395,10 @@ export async function generateObjectWithFailover<T>(
     options?: Partial<GenerateObjectOptions>
 ): Promise<T> {
     return executeWithRetryAndFailover(async (provider) => {
-        // Create the model using the provider function with explicit typing
+        // Create the model using the provider function with Helicone integration
         const modelInstance: LanguageModelV1 = provider.name === 'openai'
-            ? openai(provider.model) as LanguageModelV1
-            : anthropic(provider.model) as LanguageModelV1;
+            ? createModelWithHelicone('openai', provider.model)
+            : createModelWithHelicone('anthropic', provider.model);
 
         const result = await generateObject({
             // @ts-ignore - TypeScript incorrectly infers string | LanguageModelV1 despite explicit casting
@@ -385,10 +422,10 @@ export async function generateTextWithFailover(
     options?: Partial<GenerateTextOptions>
 ): Promise<GenerateTextResult<ToolSet, any>> {
     return executeWithRetryAndFailover(async (provider) => {
-        // Create the model using the provider function with explicit typing
+        // Create the model using the provider function with Helicone integration
         const modelInstance: LanguageModelV1 = provider.name === 'openai'
-            ? openai(provider.model) as LanguageModelV1
-            : anthropic(provider.model) as LanguageModelV1;
+            ? createModelWithHelicone('openai', provider.model)
+            : createModelWithHelicone('anthropic', provider.model);
 
         const result = await generateText({
             // @ts-ignore - TypeScript incorrectly infers string | LanguageModelV1 despite explicit casting
@@ -415,9 +452,7 @@ export async function generateQADocumentWithFailover<T>(
     return executeWithRetryAndFailover(async (provider) => {
         console.log(`Attempting with provider ${provider.name}`);
 
-        const modelInstance = provider.name === 'openai'
-            ? openai(provider.model)
-            : anthropic(provider.model);
+        const modelInstance = createModelWithHelicone(provider.name as 'openai' | 'anthropic', provider.model);
 
         // Provide the exact schema structure expected
         const enhancedPrompt = prompt + `\n\nGenerate a QA document with this EXACT JSON structure. Follow the schema precisely:\n\n{
@@ -570,10 +605,10 @@ export async function streamTextWithFailover(
     options?: Partial<StreamTextOptions>
 ): Promise<StreamTextResult<ToolSet, any>> {
     return executeWithRetryAndFailover(async (provider) => {
-        // Create the model using the provider function with explicit typing
+        // Create the model using the provider function with Helicone integration
         const modelInstance: LanguageModelV1 = provider.name === 'openai'
-            ? openai(provider.model) as LanguageModelV1
-            : anthropic(provider.model) as LanguageModelV1;
+            ? createModelWithHelicone('openai', provider.model)
+            : createModelWithHelicone('anthropic', provider.model);
 
         const result = streamText({
             // @ts-ignore - TypeScript incorrectly infers string | LanguageModelV1 despite explicit casting

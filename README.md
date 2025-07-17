@@ -12,8 +12,9 @@
 4. [📡 API Endpoints](#-api-endpoints)
 5. [🧪 Testing Framework](#-testing-framework)
 6. [🔄 Provider Failover System](#-provider-failover-system)
-7. [🚀 Deployment Guide](#-deployment-guide)
-8. [📊 Performance & Monitoring](#-performance--monitoring)
+7. [📊 AI Monitoring with Helicone](#-ai-monitoring-with-helicone)
+8. [🚀 Deployment Guide](#-deployment-guide)
+9. [📊 Performance & Monitoring](#-performance--monitoring)
 9. [🔒 Security Considerations](#-security-considerations)
 10. [🛠️ Development Guide](#️-development-guide)
 11. [📚 Additional Resources](#-additional-resources)
@@ -554,6 +555,126 @@ resetCircuitBreaker('openai');
 // Reset all circuit breakers
 resetAllCircuitBreakers();
 ```
+
+---
+
+## 📊 AI Monitoring with Helicone
+
+**Comprehensive AI request monitoring, analytics, and cost tracking**
+
+Helicone is integrated to provide real-time monitoring of all AI API calls, cost analytics, and performance insights across OpenAI and Anthropic providers.
+
+### 🚀 Quick Setup
+
+#### 1. Automated Setup
+
+```bash
+# Run the interactive setup script
+node scripts/setup-helicone.js
+```
+
+#### 2. Manual Configuration
+
+Add to your `.env` file:
+
+```env
+# Helicone Configuration
+HELICONE_API_KEY=your_api_key_here
+HELICONE_ENABLED=true
+HELICONE_PROPERTY_TAG=super-qa-ai
+HELICONE_USER_ID=optional_user_id
+HELICONE_RATE_LIMIT_POLICY=optional_policy
+```
+
+### 📈 Features
+
+- **📊 Real-time Analytics**: Monitor all AI requests and responses
+- **💰 Cost Tracking**: Track spending across OpenAI and Anthropic
+- **⚡ Performance Metrics**: Response times and success rates
+- **🔄 Failover Monitoring**: Track provider failover events
+- **🏷️ Custom Properties**: Tag requests by endpoint, environment, model
+- **🚨 Rate Limiting**: Control API usage with custom policies
+
+### 🔍 Monitoring Dashboard
+
+Access your Helicone dashboard at: [https://helicone.ai/dashboard](https://helicone.ai/dashboard)
+
+**Key Metrics Available:**
+- Request volume and patterns
+- Cost breakdown by provider/model
+- Error rates and failure analysis
+- Provider performance comparison
+- Custom event tracking
+
+### 🛠️ Integration Details
+
+#### Automatic Request Tracking
+
+All AI requests are automatically tracked with:
+
+```typescript
+{
+  provider: 'openai' | 'anthropic',
+  model: 'gpt-4o-mini' | 'claude-3-5-haiku',
+  environment: 'development' | 'production',
+  endpoint: '/api/analyze-ticket',
+  requestId: 'unique-uuid',
+  failover_disabled: true,
+  primary_provider: 'openai'
+}
+```
+
+#### Custom Event Logging
+
+```typescript
+import { logHeliconeEvent } from '@/lib/ai/heliconeMiddleware'
+
+// Log custom events
+await logHeliconeEvent('ticket_analyzed', {
+  ticketId: 'JIRA-123',
+  complexity: 'high',
+  processingTime: 1247
+})
+```
+
+### 📋 Configuration Options
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `HELICONE_API_KEY` | Your Helicone API key | Required |
+| `HELICONE_ENABLED` | Enable/disable monitoring | `false` |
+| `HELICONE_PROPERTY_TAG` | Tag for request organization | `super-qa-ai` |
+| `HELICONE_USER_ID` | User ID for tracking | Optional |
+| `HELICONE_RATE_LIMIT_POLICY` | Rate limiting policy | Optional |
+
+### 🔧 Advanced Usage
+
+#### Rate Limiting
+
+Configure rate limits in your Helicone dashboard:
+
+```env
+HELICONE_RATE_LIMIT_POLICY=super-qa-production
+```
+
+#### Custom Properties
+
+Add custom properties to requests:
+
+```typescript
+import { createHeliconeHeaders } from '@/lib/ai/heliconeMiddleware'
+
+const headers = createHeliconeHeaders('openai', 'gpt-4o-mini', 'req-123', {
+  feature: 'ticket-analysis',
+  priority: 'high'
+})
+```
+
+### 📚 Documentation
+
+For detailed setup and usage instructions, see:
+- [Helicone Setup Guide](./docs/helicone-setup.md)
+- [Helicone Official Documentation](https://docs.helicone.ai)
 
 ---
 
