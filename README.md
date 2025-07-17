@@ -1,220 +1,323 @@
 # QA ChatCanvas Backend API
 
-Backend API for the QA ChatCanvas Interactive System - AI-powered QA documentation generation and refinement.
+**AI-powered QA documentation generation and refinement system with intelligent failover and comprehensive testing**
 
-## Quick Start
+---
 
-1. Install dependencies:
+## 📋 Table of Contents
+
+1. [🚀 Quick Start](#-quick-start)
+2. [🏗️ System Architecture](#️-system-architecture)
+3. [🔧 Configuration](#-configuration)
+4. [📡 API Endpoints](#-api-endpoints)
+5. [🧪 Testing Framework](#-testing-framework)
+6. [🔄 Provider Failover System](#-provider-failover-system)
+7. [🚀 Deployment Guide](#-deployment-guide)
+8. [📊 Performance & Monitoring](#-performance--monitoring)
+9. [🔒 Security Considerations](#-security-considerations)
+10. [🛠️ Development Guide](#️-development-guide)
+11. [📚 Additional Resources](#-additional-resources)
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 20.x or higher
+- npm or yarn package manager
+- OpenAI API key (required)
+- Anthropic API key (optional, for failover)
+
+### Installation
+
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd super-qa-ai-backend
+
+# Install dependencies
 npm install
-```
 
-2. Set up environment variables:
-```bash
+# Set up environment variables
 cp .env.example .env.local
 # Edit .env.local with your API keys
 ```
 
-3. Run development server:
-```bash
-npm run dev
-```
-
-4. Run tests:
-```bash
-npm test
-```
-
-## API Endpoints
-
-- `POST /api/analyze-ticket` - Initial ticket analysis and QA document generation
-- `POST /api/update-canvas` - Conversational refinement of QA documentation  
-- `POST /api/generate-suggestions` - Generate contextual QA improvement suggestions
-
-## Testing Endpoints
-
-You can test the API endpoints using the provided test scripts:
-
-### Testing update-canvas endpoint
+### Environment Setup
 
 ```bash
-node test-update-canvas.js
-```
-
-This script sends a request to the `/api/update-canvas` endpoint with a sample document and a user message. The endpoint returns a streaming response with AI-generated suggestions for improving the QA documentation.
-
-### Testing generate-suggestions endpoint
-
-```bash
-node test-generate-suggestions.js
-```
-
-This script sends a request to the `/api/generate-suggestions` endpoint with a sample document. The endpoint returns structured suggestions for improving test coverage.
-
-## Recent Updates
-
-### Provider Failover Mock Enhancement (July 2025)
-
-Enhanced test infrastructure for provider failover functionality:
-- **Mock Consistency**: Added `getProviderHealthStatus` mock to update-canvas test suite
-  - Fixed missing mock export that was causing test failures in error handling scenarios
-  - Ensured consistent mocking pattern across all API endpoint tests
-  - Mock returns proper health status structure with `available`, `circuitOpen`, and `lastError` fields
-- **Error Handler Integration**: Improved error handling test coverage
-  - Error handler now properly accesses provider health status during error scenarios
-  - Enhanced error context with provider status information for better debugging
-- **Test Reliability**: All update-canvas API tests now pass consistently
-  - Fixed test expectations to match actual API implementation behavior
-  - Updated mock function signatures to match AI SDK v5 requirements
-
-### End-to-End Test Fixes (July 2025)
-
-Fixed critical issues in the complete workflow test suite:
-- **API Payload Consistency**: Fixed `currentDocument` parameter to be passed as object instead of JSON string
-  - Updated `update-canvas` API call to pass document object directly
-  - Ensured consistency between API endpoint expectations and test payloads
-- **Suggestion Algorithm Robustness**: Added null checks in keyword matching to prevent runtime errors
-  - Fixed `Cannot read properties of undefined (reading 'toLowerCase')` error
-  - Enhanced error handling in coverage gap analysis
-- **Performance Test Reliability**: Fixed concurrent request testing
-  - Added proper mock reset between tests to prevent call count interference
-  - Updated test ticket data to include all required JiraTicket schema fields
-- **All E2E Tests Passing**: Complete workflow tests now pass for feature, bug, and API tickets
-
-### Test Infrastructure Improvements (July 2025)
-
-Enhanced test reliability and compatibility:
-- **Generate Suggestions Tests**: Fixed mock response structure to match AI SDK v5 requirements
-  - Updated `response` object structure with proper `id`, `timestamp`, `modelId`, `messages`, and `headers` fields
-  - Changed `logprobs` from `null` to `undefined` for better type compatibility
-  - All 14 test cases now pass successfully
-- **Test Configuration**: Using Vitest as primary test runner with Node.js environment
-- **TypeScript Compatibility**: Ensured all test mocks match the latest AI SDK type definitions
-
-### Test Fixes for Document Regenerator (July 2025)
-
-Fixed issues with the document regenerator tests:
-- Updated mocking approach for the AI SDK in `documentRegenerator.test.ts`
-- Properly mocked the `generateObject` function from the AI SDK
-- Ensured all tests pass for the document regenerator module
-
-### AI SDK v5 Integration (July 2025)
-
-The backend has been updated to be compatible with Vercel AI SDK v5. Key changes include:
-
-1. **Message Transformation Pipeline**: Updated to work with the latest SDK version
-   - Removed dependency on `convertToCoreMessages` which is no longer required in v5
-   - Implemented direct transformation of UI messages to model messages
-   - Fixed test expectations to match the new implementation
-
-2. **API Endpoints**: All endpoints now use the latest SDK functions
-   - `/api/update-canvas`: Uses streamText for conversational interactions
-   - `/api/generate-suggestions`: Uses generateObject with tools for structured output
-   - `/api/analyze-ticket`: Uses generateObject for document generation
-
-3. **Testing**: Added test scripts for manual endpoint testing
-   - `test-update-canvas.js`: Tests the conversational refinement endpoint
-   - `test-generate-suggestions.js`: Tests the suggestion generation endpoint
-
-## Deployment
-
-This project is configured for deployment on Ubuntu 22 with PM2:
-
-```bash
-npm run build
-pm2 start ecosystem.config.js
-```
-
-Alternatively, you can deploy on Vercel for optimal integration with the Vercel AI SDK:
-
-```bash
-# Install Vercel CLI if not already installed
-npm install -g vercel
-
-# Deploy to Vercel
-vercel
-```
-
-## Environment Variables
-
-The following environment variables are required:
-
-```
-# AI Provider Keys
+# Required environment variables
 OPENAI_API_KEY=your_openai_api_key_here
 ANTHROPIC_API_KEY=your_anthropic_api_key_here  # Optional fallback
+NODE_ENV=development
+API_BASE_URL=http://localhost:3000
 
-# Environment
-NODE_ENV=development|production
-
-# API Configuration  
-API_BASE_URL=http://localhost:3000  # Development
+# Optional configuration
+CIRCUIT_BREAKER_THRESHOLD=5
+CIRCUIT_BREAKER_RESET_TIMEOUT=60000
+MAX_RETRIES=3
+RETRY_DELAY_MS=1000
 ```
 
-## Technical Architecture
+### Running the Application
+
+```bash
+# Development server
+npm run dev
+
+# Production build
+npm run build
+npm start
+
+# Run tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+```
+
+---
+
+## 🏗️ System Architecture
 
 ### Core Technologies
 
 - **Next.js 15**: App Router with Route Handlers for API endpoints
 - **TypeScript 5**: Strict typing throughout the codebase
-- **Node.js 20+**: Runtime environment
-- **React 18**: Frontend components (minimal usage, primarily API-focused)
+- **Vercel AI SDK v5**: AI provider integration with streaming support
+- **Zod**: Runtime type validation and schema enforcement
+- **Vitest**: Fast testing framework with ES modules support
 
-### AI & Data Validation
+### Project Structure
 
-- **Vercel AI SDK v5**: Primary AI integration layer
-  - `generateObject` for structured output generation
-  - `streamText` for conversational interactions
-  - Direct message transformation (no longer using `convertToCoreMessages`)
-- **Zod**: Schema validation and type generation
-- **OpenAI GPT-4o**: Primary AI model (with Anthropic Claude as fallback)
+```
+src/
+├── app/
+│   └── api/                    # API route handlers
+│       ├── analyze-ticket/     # Ticket analysis endpoint
+│       ├── generate-suggestions/ # QA suggestions endpoint
+│       └── update-canvas/      # Conversational refinement
+├── lib/
+│   ├── ai/                     # AI integration layer
+│   │   ├── providerFailover.ts # Circuit breaker & failover
+│   │   ├── messageTransformer.ts # Message processing
+│   │   └── errorHandler.ts     # Error classification
+│   ├── analysis/               # Analysis algorithms
+│   │   ├── suggestionAlgorithms.ts # Core suggestion logic
+│   │   ├── uncertaintyHandler.ts   # Ambiguity detection
+│   │   └── ticketAnalyzer.ts      # Ticket processing
+│   └── schemas/                # Zod validation schemas
+│       ├── JiraTicket.ts       # Jira ticket structure
+│       ├── QACanvasDocument.ts # QA document schema
+│       └── QASuggestion.ts     # Suggestion schema
+└── __tests__/                  # Comprehensive test suite
+    ├── api/                    # Integration tests
+    ├── lib/                    # Unit tests
+    ├── e2e/                    # End-to-end tests
+    └── schemas/                # Schema validation tests
+```
 
-### Testing & Quality
+### Key Features
 
-- **Vitest**: Fast and modern testing framework with ES modules support
-- **Supertest**: API endpoint testing
-- **ESLint**: Code linting with Next.js configuration and TypeScript support
-- **Manual Test Scripts**: Node.js scripts for endpoint testing
+- **🤖 AI-Powered Analysis**: Converts Jira tickets into comprehensive QA documentation
+- **💬 Conversational Refinement**: Chat-based document improvement
+- **🎯 Intelligent Suggestions**: Context-aware QA improvement recommendations
+- **🔄 Provider Failover**: Automatic switching between OpenAI and Anthropic
+- **⚡ High Performance**: Circuit breaker pattern for reliability
+- **🧪 Comprehensive Testing**: 254 tests with 100% API coverage
+- **📊 Real-time Streaming**: Streaming responses for better UX
+- **🔒 Type Safety**: Full TypeScript coverage with runtime validation
 
-## Testing Framework
+---
 
-The project uses **Vitest** as the primary testing framework, providing fast execution and excellent ES modules support. All tests are located in the `src/__tests__` directory and follow a comprehensive testing strategy.
+## 🔧 Configuration
 
-### Test Types
+### Environment Variables
 
-#### 1. Unit Tests
-**Location**: `src/__tests__/lib/`
-- **Algorithm Tests**: Core suggestion algorithms (`suggestionAlgorithms.test.ts`)
-- **AI Integration**: Message transformers, error handlers, and AI utilities
-- **Analysis Tools**: Ticket analyzers and test case formatters
-- **Uncertainty Handling**: Logic for handling ambiguous requirements
+#### Required Variables
+```bash
+# AI Provider Configuration
+OPENAI_API_KEY=sk-...                    # OpenAI API key (required)
+ANTHROPIC_API_KEY=sk-ant-...            # Anthropic API key (optional)
 
-#### 2. Integration Tests
-**Location**: `src/__tests__/api/`
-- **API Endpoints**: All three main API routes with full request/response validation
-  - `analyze-ticket.test.ts` (7 tests) - Ticket analysis and document generation
-  - `generate-suggestions.test.ts` (9 tests) - QA improvement suggestions
-  - `update-canvas.test.ts` (9 tests) - Conversational document refinement
-- **Provider Failover**: AI provider switching and circuit breaker logic
-- **Error Handling**: Comprehensive error scenarios and status code validation
+# Application Configuration
+NODE_ENV=development|production          # Environment mode
+API_BASE_URL=http://localhost:3000      # Base URL for API
+```
 
-#### 3. End-to-End Tests
-**Location**: `src/__tests__/e2e/`
-- **Complete Workflow**: Full user journey from ticket analysis to suggestions
-- **Multi-ticket Types**: Feature requests, bug reports, and API documentation
-- **Performance Testing**: Concurrent request handling and response times
+#### Optional Configuration
+```bash
+# Circuit Breaker Settings
+CIRCUIT_BREAKER_THRESHOLD=5             # Failures before circuit opens
+CIRCUIT_BREAKER_RESET_TIMEOUT=60000     # Auto-reset timeout (ms)
 
-#### 4. Schema Validation Tests
-**Location**: `src/__tests__/schemas/`
-- **Data Validation**: Zod schema compliance for all data structures
-- **Type Safety**: TypeScript type validation and discriminated unions
-- **Real Data Testing**: Validation against actual production-like data
+# Retry Configuration
+MAX_RETRIES=3                           # Maximum retry attempts
+RETRY_DELAY_MS=1000                     # Initial retry delay (ms)
 
-#### 5. Advanced Logic Tests
-**Location**: `src/__tests__/lib/ai/`
-- **Circuit Breaker**: Provider failover and retry mechanisms (2 tests skipped due to timing complexity)
-- **Document Regeneration**: AI-powered document reconstruction
-- **QA Suggestion Tools**: Advanced suggestion generation algorithms
+# Model Configuration
+OPENAI_MODEL=gpt-4o                     # OpenAI model to use
+ANTHROPIC_MODEL=claude-3-opus-20240229  # Anthropic model to use
+
+# Timeout Settings
+OPENAI_TIMEOUT=60000                    # OpenAI request timeout (ms)
+ANTHROPIC_TIMEOUT=60000                 # Anthropic request timeout (ms)
+```
+
+### Configuration Files
+
+#### Package.json Scripts
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  }
+}
+```
+
+#### Vitest Configuration
+```typescript
+// vitest.config.ts
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    globals: true,
+    setupFiles: ['./src/__tests__/setup.test.ts'],
+    timeout: 5000,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html']
+    }
+  }
+})
+```
+
+---
+
+## 📡 API Endpoints
+
+### Core Endpoints
+
+#### 1. Analyze Ticket
+**Endpoint**: `POST /api/analyze-ticket`
+**Purpose**: Convert Jira tickets into comprehensive QA Canvas documents
+
+**Request Body**:
+```typescript
+{
+  ticket: JiraTicket,           // Complete Jira ticket data
+  options?: {
+    includeAttachments?: boolean,
+    generateTestCases?: boolean,
+    analysisDepth?: 'basic' | 'detailed'
+  }
+}
+```
+
+**Response**:
+```typescript
+{
+  success: boolean,
+  document: QACanvasDocument,   // Generated QA document
+  metadata: {
+    processingTime: number,
+    aiModel: string,
+    wordCount: number,
+    testCaseCount: number
+  }
+}
+```
+
+#### 2. Generate Suggestions
+**Endpoint**: `POST /api/generate-suggestions`
+**Purpose**: Generate contextual QA improvement suggestions
+
+**Request Body**:
+```typescript
+{
+  currentDocument: QACanvasDocument,
+  focusAreas?: SuggestionType[],    // Areas to focus on
+  excludeTypes?: SuggestionType[],  // Types to exclude
+  maxSuggestions?: number,          // Maximum suggestions (default: 5)
+  context?: string                  // Additional context
+}
+```
+
+**Response**:
+```typescript
+{
+  success: boolean,
+  suggestions: QASuggestion[],      // Generated suggestions
+  metadata: {
+    totalSuggestions: number,
+    processingTime: number,
+    aiModel: string
+  }
+}
+```
+
+#### 3. Update Canvas
+**Endpoint**: `POST /api/update-canvas`
+**Purpose**: Conversational refinement of QA documentation
+
+**Request Body**:
+```typescript
+{
+  currentDocument: QACanvasDocument,
+  message: string,                  // User's refinement request
+  conversationHistory?: Message[]   // Previous conversation
+}
+```
+
+**Response**: Streaming response with real-time updates
+```typescript
+// Streamed chunks
+{
+  type: 'delta' | 'done',
+  content?: string,
+  updatedDocument?: QACanvasDocument
+}
+```
+
+### Error Responses
+
+All endpoints return consistent error responses:
+
+```typescript
+{
+  success: false,
+  error: {
+    code: string,                   // Error code (e.g., 'VALIDATION_ERROR')
+    message: string,                // Human-readable message
+    details?: any,                  // Additional error details
+    timestamp: string               // ISO timestamp
+  }
+}
+```
+
+### Status Codes
+
+- `200` - Success
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized (missing/invalid API keys)
+- `429` - Rate Limited
+- `500` - Internal Server Error (AI processing errors)
+- `503` - Service Unavailable (all AI providers down)
+
+---
+
+## 🧪 Testing Framework
+
+The project uses **Vitest** as the primary testing framework, providing comprehensive coverage across all system components.
 
 ### Test Statistics
 
@@ -224,9 +327,93 @@ The project uses **Vitest** as the primary testing framework, providing fast exe
 - 📊 **100% API endpoint coverage** (all 3 main endpoints)
 - 🔄 **Complete workflow testing** from ticket analysis to suggestions
 
+### Test Categories
+
+#### 1. Unit Tests (`src/__tests__/lib/`)
+**Purpose**: Test individual functions and modules in isolation
+
+**Coverage**:
+- **Algorithm Tests**: Core suggestion algorithms (`suggestionAlgorithms.test.ts`)
+- **AI Integration**: Message transformers, error handlers, and AI utilities
+- **Analysis Tools**: Ticket analyzers and test case formatters
+- **Uncertainty Handling**: Logic for handling ambiguous requirements
+
+**Characteristics**:
+- Fast execution (< 100ms per test)
+- Isolated dependencies with mocks
+- High code coverage
+- Focus on business logic
+
+#### 2. Integration Tests (`src/__tests__/api/`)
+**Purpose**: Test complete API request/response cycles
+
+**Coverage**:
+- **analyze-ticket** (7 tests): Ticket analysis and document generation
+- **generate-suggestions** (9 tests): QA improvement suggestions with AI integration
+- **update-canvas** (9 tests): Conversational document refinement
+
+**Test Scenarios**:
+- Valid request processing
+- Input validation and error handling
+- AI provider integration
+- Status code validation
+- Response structure verification
+
+#### 3. End-to-End Tests (`src/__tests__/e2e/`)
+**Purpose**: Test complete user workflows
+
+**Scenarios**:
+- Feature ticket → Analysis → Suggestions → Refinement
+- Bug report → Analysis → Test case generation
+- API documentation → Analysis → Coverage suggestions
+- Performance testing with concurrent requests
+
+#### 4. Schema Validation Tests (`src/__tests__/schemas/`)
+**Purpose**: Ensure data integrity and type safety
+
+**Coverage**:
+- Zod schema compliance
+- TypeScript type validation
+- Discriminated union handling
+- Real-world data validation
+- Edge case data structures
+
+#### 5. Advanced Logic Tests (`src/__tests__/lib/ai/`)
+**Purpose**: Test complex algorithms and AI integrations
+
+**Examples**:
+- Circuit breaker logic (provider failover)
+- Document regeneration algorithms
+- QA suggestion tools
+- Provider health monitoring
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run specific test file
+npm test -- src/__tests__/api/generate-suggestions.test.ts
+
+# Run tests with pattern matching
+npm test -- --grep "should handle error"
+
+# Run tests with coverage
+npm run test:coverage
+
+# Run tests for specific category
+npm test -- src/__tests__/api/        # Integration tests only
+npm test -- src/__tests__/lib/        # Unit tests only
+npm test -- src/__tests__/e2e/        # E2E tests only
+```
+
 ### Real API Testing Scripts
 
-In addition to the comprehensive test suite, the project includes **real API testing scripts** located in the root directory. These scripts test the actual API endpoints using real HTTP requests, real data, and your actual API credentials (no mocks).
+In addition to the automated test suite, the project includes **real API testing scripts** that test actual endpoints without mocks.
 
 #### Available Scripts
 
@@ -250,14 +437,14 @@ In addition to the comprehensive test suite, the project includes **real API tes
 #### Usage
 
 ```bash
+# Ensure server is running
+npm run dev
+
 # Test individual endpoints
 node test-api-analyze-ticket.js
 node test-api-generate-suggestions.js
 node test-api-generate-suggestions-advanced.js
 node test-api-update-canvas.js
-
-# Make sure your server is running first
-npm run dev
 ```
 
 #### Sample Output
@@ -270,40 +457,28 @@ npm run dev
 📋 Resumen del documento generado:
    • Ticket ID: TEST-123
    • Modelo AI: gpt-4o
+   • Tiempo de generación: 1247ms
+   • Conteo de palabras: 1543
    • Criterios de aceptación: 3
    • Casos de prueba: 5
+   • Advertencias: 1
 💾 Documento completo guardado en: analyze-result.json
-```
-
-These scripts complement the automated test suite by providing manual testing capabilities with real API integration.
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run specific test file
-npm test -- src/__tests__/api/generate-suggestions.test.ts
-
-# Run tests with coverage
-npm run test:coverage
 ```
 
 ### Test Configuration
 
-The project uses Vitest with the following configuration:
-- **Environment**: Node.js
-- **Module Support**: ES modules with TypeScript
-- **Mocking**: Vi mocks for AI providers and external dependencies
-- **Timeout**: 5000ms for complex integration tests
-- **Coverage**: Comprehensive coverage reporting available
+#### Mock Strategy
+The project uses comprehensive mocking for:
+- **AI Providers**: OpenAI and Anthropic API calls
+- **External Services**: HTTP requests and third-party APIs
+- **Environment Variables**: API keys and configuration
+- **File System**: Document storage and retrieval
+
+#### Best Practices
+1. **Type-Safe Mocks**: Leverage TypeScript for mock validation
+2. **Comprehensive Coverage**: Test both success and failure scenarios
+3. **Isolated Tests**: Each test runs independently
+4. **Realistic Data**: Use production-like test data
+5. **Performance Testing**: Include timing and concurrency tests
 
 ---
-
-# **Technical Design Plan & Implementation: "QA Chat & Canvas" with Vercel AI SDK v5**
-
-[Rest of the existing README content...]
