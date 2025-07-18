@@ -1,0 +1,222 @@
+{
+  "messages": [
+    {
+      "id": "msg-1",
+      "role": "user",
+      "content": "Can you add more test cases for edge cases?",
+      "createdAt": "2025-01-18T01:30:00.000Z"
+    },
+    {
+      "id": "msg-2",
+      "role": "assistant",
+      "content": "I'll add more edge case test scenarios to improve coverage.",
+      "createdAt": "2025-01-18T01:30:15.000Z"
+    },
+    {
+      "id": "msg-3",
+      "role": "user",
+      "content": "Also make sure to include negative testing for invalid inputs",
+      "createdAt": "2025-01-18T01:31:00.000Z"
+    }
+  ],
+  "currentDocument": {
+    "ticketSummary": {
+      "problem": "The Factory Ticket Printed check is being automatically marked as printed when no factory ticket has actually been printed, leading to incorrect order statuses.",
+      "solution": "The system will be updated to ensure that the Factory Ticket is only marked as printed after the user confirms it has been printed.",
+      "context": "This functionality is crucial for accurate order processing and inventory management within the EnCore K2 Services system."
+    },
+    "configurationWarnings": [
+      {
+        "type": "category_mismatch",
+        "title": "API Testing Category Enabled",
+        "message": "API testing category is enabled but ticket may not involve API functionality",
+        "recommendation": "Consider disabling API testing category or verify if API endpoints are involved",
+        "severity": "medium"
+      }
+    ],
+    "acceptanceCriteria": [
+      {
+        "id": "ac-1",
+        "title": "Factory Ticket Printed Flag Behavior",
+        "description": "The Factory Ticket Printed flag should only be checked after the user confirms that the factory ticket has been printed.",
+        "priority": "must",
+        "category": "functional",
+        "testable": true
+      },
+      {
+        "id": "ac-2",
+        "title": "No Automatic Checking of Printed Flag",
+        "description": "The system should not automatically check the Factory Ticket Printed flag when navigating between order processing and sheet ordering.",
+        "priority": "must",
+        "category": "functional",
+        "testable": true
+      }
+    ],
+    "testCases": [
+      {
+        "format": "gherkin",
+        "id": "tc-1",
+        "category": "functional",
+        "priority": "high",
+        "estimatedTime": "5 minutes",
+        "testCase": {
+          "scenario": "Verify Factory Ticket Printed Flag Behavior",
+          "given": [
+            "An order is created in the system",
+            "The Factory Ticket Printed flag is unchecked"
+          ],
+          "when": [
+            "The user navigates to Sheet Ordering",
+            "The user returns to the order processing tab"
+          ],
+          "then": ["The Factory Ticket Printed flag should remain unchecked"],
+          "tags": ["@functional", "@regression"]
+        }
+      },
+      {
+        "format": "steps",
+        "id": "tc-2",
+        "category": "negative",
+        "priority": "medium",
+        "estimatedTime": "3 minutes",
+        "testCase": {
+          "title": "Test Invalid Factory Ticket Confirmation",
+          "objective": "Verify system handles invalid confirmation inputs properly",
+          "preconditions": [
+            "User is logged into the system",
+            "An order exists with unpaid factory ticket"
+          ],
+          "steps": [
+            {
+              "stepNumber": 1,
+              "action": "Navigate to order processing page",
+              "expectedResult": "Order processing page loads successfully",
+              "notes": "Ensure all order details are visible"
+            },
+            {
+              "stepNumber": 2,
+              "action": "Attempt to confirm factory ticket with invalid input",
+              "expectedResult": "System displays appropriate error message",
+              "notes": "Test with null, empty string, and invalid characters"
+            }
+          ],
+          "postconditions": [
+            "Factory ticket remains unconfirmed",
+            "No data corruption occurs"
+          ]
+        }
+      },
+      {
+        "format": "table",
+        "id": "tc-3",
+        "category": "database",
+        "priority": "high",
+        "estimatedTime": "10 minutes",
+        "testCase": {
+          "title": "Database Flag Update Verification",
+          "description": "Verify database correctly updates factory ticket printed flag",
+          "testData": [
+            {
+              "orderId": "ORD-001",
+              "initialFlag": "false",
+              "userAction": "confirm_printed",
+              "expectedFlag": "true"
+            },
+            {
+              "orderId": "ORD-002",
+              "initialFlag": "false",
+              "userAction": "navigate_away",
+              "expectedFlag": "false"
+            },
+            {
+              "orderId": "ORD-003",
+              "initialFlag": "true",
+              "userAction": "unconfirm_printed",
+              "expectedFlag": "false"
+            }
+          ],
+          "expectedOutcome": "Database flag matches user action for all test scenarios",
+          "notes": "Verify database consistency after each operation"
+        }
+      }
+    ],
+    "metadata": {
+      "generatedAt": "2025-01-18T01:25:00.000Z",
+      "qaProfile": {
+        "qaCategories": {
+          "functional": true,
+          "ux": true,
+          "ui": true,
+          "negative": true,
+          "api": false,
+          "database": true,
+          "performance": false,
+          "security": false,
+          "mobile": false,
+          "accessibility": false
+        },
+        "testCaseFormat": "gherkin",
+        "autoRefresh": true,
+        "includeComments": true,
+        "includeImages": true,
+        "operationMode": "online",
+        "showNotifications": true
+      },
+      "ticketId": "EN-8775",
+      "documentVersion": "1.0",
+      "aiModel": "gpt-4o-mini",
+      "generationTime": 15000,
+      "wordCount": 450,
+      "regenerationReason": "User requested additional edge cases"
+    }
+  },
+  "originalTicketData": {
+    "issueKey": "EN-8775",
+    "summary": "Factory Ticket Printed check is being marked as printed automatically",
+    "description": "The Factory Ticket Printed check is being automatically marked as printed when no factory ticket has actually been printed. This issue persists despite previous attempts to fix it. The system should only mark the ticket as printed after explicit user confirmation.",
+    "status": "In Progress",
+    "priority": "High",
+    "issueType": "Bug",
+    "assignee": "John Developer",
+    "reporter": "QA Tester",
+    "comments": [
+      {
+        "author": "QA Tester",
+        "body": "This issue is causing problems in production. Orders are showing as printed when they haven't been processed yet.",
+        "date": "2025-01-15T10:00:00Z"
+      },
+      {
+        "author": "Developer",
+        "body": "I've added logging to track when the flag gets set. The issue seems to occur during navigation between tabs.",
+        "date": "2025-01-16T14:30:00Z"
+      },
+      {
+        "author": "Product Manager",
+        "body": "We need to ensure this doesn't affect the inventory management system. Please add validation before marking as printed.",
+        "date": "2025-01-17T09:15:00Z"
+      }
+    ],
+    "attachments": [
+      {
+        "name": "screenshot-error.png",
+        "mime": "image/png",
+        "size": 45678,
+        "data": "base64-image-data-here"
+      },
+      {
+        "name": "debug-logs.txt",
+        "mime": "text/plain",
+        "size": 12345,
+        "data": "base64-text-data-here"
+      }
+    ],
+    "components": ["Order Processing", "Factory Management"],
+    "customFields": {
+      "Epic Link": "EN-8000",
+      "Story Points": "5",
+      "Environment": "Production",
+      "Severity": "High"
+    },
+    "scrapedAt": "2025-01-18T01:20:00.000Z"
+  }
+}

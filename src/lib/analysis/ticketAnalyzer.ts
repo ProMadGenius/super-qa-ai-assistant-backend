@@ -32,13 +32,13 @@ export interface ConfigurationWarning {
 export function analyzeTicketContent(ticket: JiraTicket): TicketSummary {
   // Extract problem from summary and description
   const problem = extractProblemStatement(ticket)
-  
+
   // Extract solution from description and comments
   const solution = extractSolutionStatement(ticket)
-  
+
   // Extract context from components, custom fields, and metadata
   const context = extractContextInformation(ticket)
-  
+
   return {
     problem,
     solution,
@@ -52,20 +52,20 @@ export function analyzeTicketContent(ticket: JiraTicket): TicketSummary {
 function extractProblemStatement(ticket: JiraTicket): string {
   const summary = ticket.summary.toLowerCase()
   const description = ticket.description.toLowerCase()
-  
+
   // Common problem indicators
   const problemKeywords = [
     'bug', 'issue', 'error', 'problem', 'fail', 'broken', 'not working',
     'unable to', 'cannot', 'does not', 'missing', 'incorrect'
   ]
-  
+
   // Check if this is a bug/issue ticket
-  if (ticket.issueType.toLowerCase().includes('bug') || 
-      problemKeywords.some(keyword => summary.includes(keyword) || description.includes(keyword))) {
-    
+  if (ticket.issueType.toLowerCase().includes('bug') ||
+    problemKeywords.some(keyword => summary.includes(keyword) || description.includes(keyword))) {
+
     // Extract the core problem
     let problemText = ticket.summary
-    
+
     // Add context from description if it provides more clarity
     if (ticket.description && ticket.description.length > 0) {
       const descriptionLines = ticket.description.split('\n').slice(0, 2) // First 2 lines
@@ -74,10 +74,10 @@ function extractProblemStatement(ticket: JiraTicket): string {
         problemText += `. ${relevantDescription}`
       }
     }
-    
+
     return problemText.trim()
   }
-  
+
   // For feature/story tickets, the "problem" is the need or requirement
   return `Need to implement: ${ticket.summary}`
 }
@@ -88,23 +88,23 @@ function extractProblemStatement(ticket: JiraTicket): string {
 function extractSolutionStatement(ticket: JiraTicket): string {
   const description = ticket.description
   const issueType = ticket.issueType.toLowerCase()
-  
+
   // For bugs, look for solution in description or comments
   if (issueType.includes('bug')) {
     // Look for solution indicators in description
     const solutionKeywords = ['fix', 'resolve', 'solution', 'implement', 'change', 'update', 'modify']
-    
+
     if (description) {
       const sentences = description.split(/[.!?]+/)
-      const solutionSentence = sentences.find(sentence => 
+      const solutionSentence = sentences.find(sentence =>
         solutionKeywords.some(keyword => sentence.toLowerCase().includes(keyword))
       )
-      
+
       if (solutionSentence) {
         return solutionSentence.trim()
       }
     }
-    
+
     // Check recent comments for solution information
     const recentComments = ticket.comments.slice(-3) // Last 3 comments
     for (const comment of recentComments) {
@@ -112,10 +112,10 @@ function extractSolutionStatement(ticket: JiraTicket): string {
         return comment.body.substring(0, 200).trim() + (comment.body.length > 200 ? '...' : '')
       }
     }
-    
+
     return `Fix the issue described in: ${ticket.summary}`
   }
-  
+
   // For features/stories, the solution is the implementation
   if (description && description.length > 0) {
     // Take the first meaningful paragraph from description
@@ -124,7 +124,7 @@ function extractSolutionStatement(ticket: JiraTicket): string {
       return paragraphs[0].substring(0, 300).trim() + (paragraphs[0].length > 300 ? '...' : '')
     }
   }
-  
+
   return `Implement the feature as described in: ${ticket.summary}`
 }
 
@@ -133,34 +133,34 @@ function extractSolutionStatement(ticket: JiraTicket): string {
  */
 function extractContextInformation(ticket: JiraTicket): string {
   const contextParts: string[] = []
-  
+
   // Add component context
   if (ticket.components.length > 0) {
     contextParts.push(`Affects components: ${ticket.components.join(', ')}`)
   }
-  
+
   // Add priority context
   if (ticket.priority && ticket.priority !== 'None') {
     contextParts.push(`Priority: ${ticket.priority}`)
   }
-  
+
   // Add custom field context (if relevant)
   const relevantCustomFields = Object.entries(ticket.customFields)
     .filter(([key, value]) => value && typeof value === 'string' && value.length > 0)
     .slice(0, 2) // Limit to 2 most relevant
-  
+
   if (relevantCustomFields.length > 0) {
     const customFieldText = relevantCustomFields
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ')
     contextParts.push(customFieldText)
   }
-  
+
   // Add assignee context if available
   if (ticket.assignee && ticket.assignee !== 'Unassigned') {
     contextParts.push(`Assigned to: ${ticket.assignee}`)
   }
-  
+
   return contextParts.join('. ') || 'General development task'
 }
 
@@ -168,11 +168,11 @@ function extractContextInformation(ticket: JiraTicket): string {
  * Detect configuration conflicts between ticket requirements and QA settings
  */
 export function detectConfigurationConflicts(
-  ticket: JiraTicket, 
+  ticket: JiraTicket,
   qaProfile: QAProfile
 ): ConfigurationWarning[] {
   const warnings: ConfigurationWarning[] = []
-  
+
   // Check for API testing needs
   if (requiresAPITesting(ticket) && !qaProfile.qaCategories.api) {
     warnings.push({
@@ -183,7 +183,7 @@ export function detectConfigurationConflicts(
       severity: 'high'
     })
   }
-  
+
   // Check for database testing needs
   if (requiresDatabaseTesting(ticket) && !qaProfile.qaCategories.database) {
     warnings.push({
@@ -194,7 +194,7 @@ export function detectConfigurationConflicts(
       severity: 'high'
     })
   }
-  
+
   // Check for security testing needs
   if (requiresSecurityTesting(ticket) && !qaProfile.qaCategories.security) {
     warnings.push({
@@ -205,7 +205,7 @@ export function detectConfigurationConflicts(
       severity: 'high'
     })
   }
-  
+
   // Check for performance testing needs
   if (requiresPerformanceTesting(ticket) && !qaProfile.qaCategories.performance) {
     warnings.push({
@@ -216,7 +216,7 @@ export function detectConfigurationConflicts(
       severity: 'medium'
     })
   }
-  
+
   // Check for mobile testing needs
   if (requiresMobileTesting(ticket) && !qaProfile.qaCategories.mobile) {
     warnings.push({
@@ -227,7 +227,7 @@ export function detectConfigurationConflicts(
       severity: 'medium'
     })
   }
-  
+
   // Check for accessibility testing needs
   if (requiresAccessibilityTesting(ticket) && !qaProfile.qaCategories.accessibility) {
     warnings.push({
@@ -238,13 +238,13 @@ export function detectConfigurationConflicts(
       severity: 'medium'
     })
   }
-  
+
   // Check test case format recommendations
   const formatRecommendation = recommendTestCaseFormat(ticket, qaProfile)
   if (formatRecommendation) {
     warnings.push(formatRecommendation)
   }
-  
+
   return warnings
 }
 
@@ -257,9 +257,9 @@ function requiresAPITesting(ticket: JiraTicket): boolean {
     'api', 'endpoint', 'rest', 'graphql', 'webhook', 'integration',
     'service', 'microservice', 'backend', 'server', 'request', 'response'
   ]
-  
+
   return apiKeywords.some(keyword => content.includes(keyword)) ||
-         ticket.components.some(comp => comp.toLowerCase().includes('api') || comp.toLowerCase().includes('backend'))
+    ticket.components.some(comp => comp.toLowerCase().includes('api') || comp.toLowerCase().includes('backend'))
 }
 
 /**
@@ -271,7 +271,7 @@ function requiresDatabaseTesting(ticket: JiraTicket): boolean {
     'database', 'db', 'sql', 'query', 'table', 'migration', 'schema',
     'data', 'storage', 'persistence', 'repository', 'model'
   ]
-  
+
   return dbKeywords.some(keyword => content.includes(keyword))
 }
 
@@ -284,7 +284,7 @@ function requiresSecurityTesting(ticket: JiraTicket): boolean {
     'auth', 'login', 'password', 'token', 'security', 'permission',
     'role', 'access', 'encrypt', 'decrypt', 'ssl', 'https', 'oauth'
   ]
-  
+
   return securityKeywords.some(keyword => content.includes(keyword))
 }
 
@@ -297,9 +297,9 @@ function requiresPerformanceTesting(ticket: JiraTicket): boolean {
     'performance', 'slow', 'speed', 'optimization', 'cache', 'load',
     'scale', 'memory', 'cpu', 'timeout', 'latency', 'throughput'
   ]
-  
+
   return performanceKeywords.some(keyword => content.includes(keyword)) ||
-         ticket.priority.toLowerCase().includes('high')
+    ticket.priority.toLowerCase().includes('high')
 }
 
 /**
@@ -311,7 +311,7 @@ function requiresMobileTesting(ticket: JiraTicket): boolean {
     'mobile', 'responsive', 'tablet', 'phone', 'ios', 'android',
     'touch', 'swipe', 'gesture', 'viewport', 'breakpoint'
   ]
-  
+
   return mobileKeywords.some(keyword => content.includes(keyword))
 }
 
@@ -324,7 +324,7 @@ function requiresAccessibilityTesting(ticket: JiraTicket): boolean {
     'accessibility', 'a11y', 'wcag', 'screen reader', 'keyboard',
     'contrast', 'aria', 'alt text', 'focus', 'disability'
   ]
-  
+
   return a11yKeywords.some(keyword => content.includes(keyword))
 }
 
@@ -333,11 +333,11 @@ function requiresAccessibilityTesting(ticket: JiraTicket): boolean {
  */
 function recommendTestCaseFormat(ticket: JiraTicket, qaProfile: QAProfile): ConfigurationWarning | null {
   const content = `${ticket.summary} ${ticket.description}`.toLowerCase()
-  
+
   // Recommend Gherkin for user-facing features
-  if (qaProfile.testCaseFormat !== 'gherkin' && 
-      (content.includes('user') || content.includes('customer') || 
-       content.includes('interface') || ticket.issueType.toLowerCase().includes('story'))) {
+  if (qaProfile.testCaseFormat !== 'gherkin' &&
+    (content.includes('user') || content.includes('customer') ||
+      content.includes('interface') || ticket.issueType.toLowerCase().includes('story'))) {
     return {
       type: 'recommendation',
       title: 'Gherkin Format Recommended',
@@ -346,11 +346,11 @@ function recommendTestCaseFormat(ticket: JiraTicket, qaProfile: QAProfile): Conf
       severity: 'low'
     }
   }
-  
+
   // Recommend table format for data-heavy testing
-  if (qaProfile.testCaseFormat !== 'table' && 
-      (content.includes('data') || content.includes('import') || 
-       content.includes('export') || content.includes('batch'))) {
+  if (qaProfile.testCaseFormat !== 'table' &&
+    (content.includes('data') || content.includes('import') ||
+      content.includes('export') || content.includes('batch'))) {
     return {
       type: 'recommendation',
       title: 'Table Format Recommended',
@@ -359,7 +359,7 @@ function recommendTestCaseFormat(ticket: JiraTicket, qaProfile: QAProfile): Conf
       severity: 'low'
     }
   }
-  
+
   return null
 }
 
@@ -382,17 +382,17 @@ export function estimateTestComplexity(ticket: JiraTicket): 'low' | 'medium' | '
     medium: ['feature', 'enhancement', 'update', 'modify', 'change'],
     low: ['fix', 'bug', 'simple', 'minor', 'small']
   }
-  
+
   // Check for high complexity indicators
   if (complexityIndicators.high.some(indicator => content.includes(indicator))) {
     return 'high'
   }
-  
+
   // Check for low complexity indicators
   if (complexityIndicators.low.some(indicator => content.includes(indicator))) {
     return 'low'
   }
-  
+
   // Default to medium complexity
   return 'medium'
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateQADocumentWithFailover, generateQADocumentWithImages } from '@/lib/ai/providerFailover'
+import { generateQADocumentWithImages } from '@/lib/ai/providerFailover'
 import {
   validateTicketAnalysisPayload,
   type TicketAnalysisPayload
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     if (body.ticketJson?.attachments?.length > 0) {
       console.log('📎 Attachments found:')
-      body.ticketJson.attachments.forEach((att, i) => {
+      body.ticketJson.attachments.forEach((att: any, i: number) => {
         console.log(`  ${i + 1}. ${att.name} (${att.mime}) - ${att.size} bytes - tooBig: ${att.tooBig}`)
         console.log(`     Has data: ${att.data ? 'YES' : 'NO'} (${att.data ? att.data.substring(0, 50) + '...' : 'N/A'})`)
       })
@@ -151,7 +151,7 @@ Always follow these principles:
           console.log(`✅ Successfully processed ${uploadedImages.length} images`)
 
           // Log processed image details
-          uploadedImages.forEach((img, i) => {
+          uploadedImages.forEach((img: any, i: number) => {
             console.log(`   ${i + 1}. ${img.originalName} -> ${img.url}`)
             console.log(`       📏 Size: ${(img.size / 1024).toFixed(1)}KB (was ${(img.originalSize / 1024).toFixed(1)}KB)`)
             console.log(`       📐 Dimensions: ${img.dimensions.width}x${img.dimensions.height}`)
@@ -185,7 +185,11 @@ Always follow these principles:
     }
 
     // Build detailed analysis prompt
-    const analysisPrompt = `Analyze this Jira ticket and create comprehensive QA documentation:
+    const analysisPrompt = `You are a world-class QA analyst. Analyze this Jira ticket CAREFULLY and create comprehensive QA documentation.
+
+CRITICAL: Read the comments section thoroughly and also pay atention to the images to understand what is ACTUALLY being implemented in this release.
+
+Analyze this Jira ticket and create comprehensive QA documentation:
 
 **TICKET INFORMATION:**
 - Issue Key: ${ticketJson.issueKey}
@@ -217,9 +221,9 @@ ${imageAttachments.length > 0 ?
 ${commentImages.length > 0 ?
         `\n${commentImages.length} image(s) in comments: ${commentImages.map(img => img.filename).join(', ')}` : ''}
 
-**COMMENTS (${ticketJson.comments.length} total):**
+**COMMENTS (${ticketJson.comments.length} total) - READ EVERY WORD CAREFULLY:**
 ${ticketJson.comments.map((comment, index) =>
-          `${index + 1}. ${comment.author} (${comment.date}): ${comment.body.substring(0, 200)}${comment.body.length > 200 ? '...' : ''}`
+          `${index + 1}. ${comment.author} (${comment.date}): ${comment.body}`
         ).join('\n')}
 
 **QA PROFILE SETTINGS:**
@@ -231,17 +235,47 @@ ${ticketJson.comments.map((comment, index) =>
 - Include Comments: ${qaProfile.includeComments}
 - Include Images: ${qaProfile.includeImages}
 
+**COMPREHENSIVE ANALYSIS INSTRUCTIONS:**
+
+You must perform a complete, intelligent analysis of this ticket by examining ALL available information:
+
+**ANALYSIS METHODOLOGY:**
+1. **Historical Context**: Read the description to understand the original problem and its history
+2. **Evolution Tracking**: Follow the comments chronologically to understand how the ticket has evolved
+3. **Current State**: Identify what is actually being implemented in the current release based on the most recent developer communications
+4. **Implementation Scope**: Determine the scope and nature of the current work (diagnostic, partial fix, complete solution, etc.)
+
+**COMPREHENSIVE REVIEW AREAS:**
+- **Description**: What was the original problem and context?
+- **Custom Fields**: What do the acceptance criteria, steps to reproduce, and other fields tell you?
+- **Comments Timeline**: How has the understanding and approach evolved over time?
+- **Developer Communications**: What are the developers actually planning to implement?
+- **Attachments**: What additional context do images/videos provide?
+
+**INTELLIGENT SYNTHESIS:**
+Your ticket summary should demonstrate deep understanding by:
+- **Problem**: Clearly articulating the root issue and its business impact
+- **Solution**: Describing what is ACTUALLY being implemented (not what was originally requested)
+- **Context**: Showing how this work fits into the broader resolution strategy and timeline
+
+**DOCUMENTATION ALIGNMENT:**
+Generate acceptance criteria and test cases that match:
+- The actual scope of work being performed
+- The current phase of the resolution process
+- The specific deliverables mentioned in recent developer comments
+
 **INSTRUCTIONS:**
-1. Create a simplified explanation of what this ticket is about (problem, solution, context)
-2. Check if there are any conflicts between the ticket requirements and QA profile settings
-3. Generate detailed acceptance criteria based on the ticket content
-4. Create comprehensive test cases in the specified format (${qaProfile.testCaseFormat})
-5. Focus on the active QA categories: ${Object.entries(qaProfile.qaCategories)
+1. Perform a thorough analysis of all ticket content to understand the complete picture
+2. Create documentation that reflects what is actually being built, not just the original problem
+3. Generate test cases in the specified format (${qaProfile.testCaseFormat}) that validate the current implementation
+4. Focus on the active QA categories: ${Object.entries(qaProfile.qaCategories)
         .filter(([_, active]) => active)
         .map(([category]) => category)
         .join(', ')}
 ${qaProfile.includeImages && (imageAttachments.length > 0 || commentImages.length > 0) ?
-        '\n6. IMPORTANT: Analyze the provided images and incorporate visual information into your test cases and acceptance criteria. Consider UI elements, workflows, error states, and visual requirements shown in the images.' : ''}
+        '\n5. IMPORTANT: Analyze the provided images and incorporate visual information into your test cases and acceptance criteria. Consider UI elements, workflows, error states, and visual requirements shown in the images.' : ''}
+
+Your analysis should demonstrate that you understand not just what the problem is, but where the ticket currently stands in its resolution journey.
 
 Generate a complete QACanvasDocument with all sections properly filled out.`
 

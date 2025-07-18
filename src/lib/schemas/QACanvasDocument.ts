@@ -42,7 +42,7 @@ export const testStepSchema = z.object({
   stepNumber: z.number().describe('Sequential step number'),
   action: z.string().describe('Action to perform'),
   expectedResult: z.string().describe('Expected outcome of the action'),
-  notes: z.string().describe('Additional notes or context for the step - use empty string if no notes')
+  notes: z.string().optional().describe('Additional notes or context for the step')
 })
 
 /**

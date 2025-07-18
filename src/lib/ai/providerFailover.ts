@@ -656,16 +656,16 @@ export function resetCircuitBreaker(providerName: string): boolean {
 export function resetAllCircuitBreakers(): void {
     Object.keys(providerStatus).forEach(resetCircuitBreaker);
 }
-/*
-*
+
+/**
  * Generate QA document with image support
  * Handles both text and image inputs for comprehensive analysis
  */
 export async function generateQADocumentWithImages<T>(
     schema: any,
     prompt: string,
-    imageAttachments: Array<{url?: string, originalName: string, filename?: string}>,
-    commentImages: Array<{url?: string, originalName: string, filename?: string}>,
+    imageAttachments: Array<{url?: string, absoluteUrl?: string, originalName: string, filename?: string}>,
+    commentImages: Array<{url?: string, absoluteUrl?: string, originalName: string, filename?: string}>,
     includeImages: boolean,
     options?: Partial<GenerateTextOptions>
 ): Promise<T> {
@@ -742,7 +742,7 @@ export async function generateQADocumentWithImages<T>(
         // Add image attachments using absolute URLs (now publicly accessible via ngrok)
         for (const attachment of imageAttachments) {
             if (attachment.absoluteUrl) {
-                messages[1].content.push({
+                (messages[1].content as any[]).push({
                     type: 'image',
                     image: attachment.absoluteUrl
                 });
@@ -753,7 +753,7 @@ export async function generateQADocumentWithImages<T>(
         // Add comment images using absolute URLs (now publicly accessible via ngrok)
         for (const commentImage of commentImages) {
             if (commentImage.absoluteUrl) {
-                messages[1].content.push({
+                (messages[1].content as any[]).push({
                     type: 'image',
                     image: commentImage.absoluteUrl
                 });
@@ -763,7 +763,7 @@ export async function generateQADocumentWithImages<T>(
 
         const result = await generateText({
             model: modelInstance,
-            messages: messages,
+            messages: messages as any,
             maxTokens: options?.maxTokens || 4000,
             temperature: options?.temperature || 0.1,
         });
