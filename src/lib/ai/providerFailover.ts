@@ -656,3 +656,186 @@ export function resetCircuitBreaker(providerName: string): boolean {
 export function resetAllCircuitBreakers(): void {
     Object.keys(providerStatus).forEach(resetCircuitBreaker);
 }
+/*
+*
+ * Generate QA document with image support
+ * Handles both text and image inputs for comprehensive analysis
+ */
+export async function generateQADocumentWithImages<T>(
+    schema: any,
+    prompt: string,
+    imageAttachments: Array<{url?: string, originalName: string, filename?: string}>,
+    commentImages: Array<{url?: string, originalName: string, filename?: string}>,
+    includeImages: boolean,
+    options?: Partial<GenerateTextOptions>
+): Promise<T> {
+    // If no images or images disabled, use regular text generation
+    if (!includeImages || (imageAttachments.length === 0 && commentImages.length === 0)) {
+        return generateQADocumentWithFailover<T>(schema, prompt, options);
+    }
+
+    return executeWithRetryAndFailover(async (provider) => {
+        console.log(`Attempting with provider ${provider.name} (with images)`);
+
+        const modelInstance = createModelWithHelicone(provider.name as 'openai' | 'anthropic', provider.model);
+
+        // Prepare messages with images
+        const messages = [];
+        
+        // Add system message
+        messages.push({
+            role: 'system',
+            content: 'You are a world-class QA analyst. Analyze the provided ticket information and images to create comprehensive test documentation.'
+        });
+
+        // Add text content
+        messages.push({
+            role: 'user',
+            content: [
+                {
+                    type: 'text',
+                    text: prompt + `\n\nGenerate a QA document with this EXACT JSON structure. Follow the schema precisely:\n\n{
+  "ticketSummary": {
+    "problem": "Clear explanation of what problem exists",
+    "solution": "Description of what will be built or fixed",
+    "context": "How this functionality fits into the broader system"
+  },
+  "configurationWarnings": [
+    {
+      "type": "category_mismatch",
+      "title": "Warning title",
+      "message": "Detailed warning message",
+      "recommendation": "Specific recommendation",
+      "severity": "medium"
+    }
+  ],
+  "acceptanceCriteria": [
+    {
+      "id": "ac-1",
+      "title": "Brief title describing the criterion",
+      "description": "Detailed description of what must be satisfied",
+      "priority": "must",
+      "category": "functional",
+      "testable": true
+    }
+  ],
+  "testCases": [
+    {
+      "format": "gherkin",
+      "id": "tc-1",
+      "category": "functional",
+      "priority": "high",
+      "testCase": {
+        "scenario": "Scenario name/title",
+        "given": ["Given condition 1", "Given condition 2"],
+        "when": ["When action 1", "When action 2"],
+        "then": ["Then assertion 1", "Then assertion 2"],
+        "tags": ["@tag1", "@tag2"]
+      }
+    }
+  ]
+}\n\nReturn ONLY the JSON object with these EXACT fields. Do not add any fields not in this schema.`
+                }
+            ]
+        });
+
+        // Add image attachments using absolute URLs (now publicly accessible via ngrok)
+        for (const attachment of imageAttachments) {
+            if (attachment.absoluteUrl) {
+                messages[1].content.push({
+                    type: 'image',
+                    image: attachment.absoluteUrl
+                });
+                console.log(`🌐 Using public URL for image: ${attachment.originalName} -> ${attachment.absoluteUrl}`);
+            }
+        }
+
+        // Add comment images using absolute URLs (now publicly accessible via ngrok)
+        for (const commentImage of commentImages) {
+            if (commentImage.absoluteUrl) {
+                messages[1].content.push({
+                    type: 'image',
+                    image: commentImage.absoluteUrl
+                });
+                console.log(`🌐 Using public URL for comment image: ${commentImage.originalName} -> ${commentImage.absoluteUrl}`);
+            }
+        }
+
+        const result = await generateText({
+            model: modelInstance,
+            messages: messages,
+            maxTokens: options?.maxTokens || 4000,
+            temperature: options?.temperature || 0.1,
+        });
+
+        console.log('Raw AI response with images:', result.text.substring(0, 500) + '...');
+
+        // Clean and parse the response (same logic as original function)
+        let parsedResult;
+        try {
+            let cleanedText = result.text.trim();
+
+            // Remove markdown code blocks if present
+            cleanedText = cleanedText.replace(/```json\s*/, '').replace(/```\s*$/, '');
+
+            // Remove any leading/trailing text that's not JSON
+            const jsonStart = cleanedText.indexOf('{');
+            const jsonEnd = cleanedText.lastIndexOf('}');
+
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+                cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
+            }
+
+            console.log('Cleaned text length:', cleanedText.length);
+            parsedResult = JSON.parse(cleanedText);
+            console.log('Parsed result keys:', Object.keys(parsedResult));
+
+            // Add the required metadata structure
+            const currentTime = new Date().toISOString();
+            const completeResult = {
+                ...parsedResult,
+                metadata: {
+                    createdAt: currentTime,
+                    lastModified: currentTime,
+                    version: "1.0.0",
+                    author: "AI Assistant",
+                    reviewStatus: "draft" as const,
+                    generatedAt: currentTime,
+                    qaProfile: {
+                        qaCategories: {
+                            functional: true,
+                            ux: true,
+                            ui: true,
+                            negative: true,
+                            api: false,
+                            database: false,
+                            performance: false,
+                            security: false,
+                            mobile: false,
+                            accessibility: false
+                        },
+                        testCaseFormat: "steps" as const,
+                        autoRefresh: true,
+                        includeComments: true,
+                        includeImages: includeImages,
+                        operationMode: "online" as const,
+                        showNotifications: true
+                    },
+                    ticketId: "TICKET-001",
+                    configurationWarnings: [],
+                    imagesProcessed: imageAttachments.length + commentImages.length
+                }
+            };
+
+            parsedResult = completeResult;
+        } catch (parseError) {
+            console.error('Failed to parse AI response as JSON:', parseError);
+            console.error('Raw response:', result.text);
+            throw new Error('Invalid JSON response from AI');
+        }
+
+        // Validate the parsed result against the schema
+        const validatedResult = schema.parse(parsedResult);
+        return validatedResult as T;
+    });
+}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generateQADocumentWithFailover } from '@/lib/ai/providerFailover'
+import { generateQADocumentWithFailover, generateQADocumentWithImages } from '@/lib/ai/providerFailover'
 import {
   validateTicketAnalysisPayload,
   type TicketAnalysisPayload
@@ -14,6 +14,11 @@ import {
   UncertaintyType
 } from '@/lib/ai/uncertaintyHandler'
 import { v4 as uuidv4 } from 'uuid'
+import {
+  processAndUploadImages,
+  prepareAttachmentImages,
+  prepareCommentImages
+} from '@/lib/utils/imageProcessor'
 
 /**
  * Handle CORS preflight requests
@@ -43,6 +48,22 @@ export async function POST(request: NextRequest) {
   try {
     // Parse and validate the request body
     const body = await request.json()
+
+    // Debug: Log the received data structure
+    console.log('🔍 Received request body structure:')
+    console.log('- ticketJson keys:', Object.keys(body.ticketJson || {}))
+    console.log('- attachments count:', body.ticketJson?.attachments?.length || 0)
+    console.log('- comments count:', body.ticketJson?.comments?.length || 0)
+    console.log('- includeImages setting:', body.qaProfile?.includeImages)
+
+    if (body.ticketJson?.attachments?.length > 0) {
+      console.log('📎 Attachments found:')
+      body.ticketJson.attachments.forEach((att, i) => {
+        console.log(`  ${i + 1}. ${att.name} (${att.mime}) - ${att.size} bytes - tooBig: ${att.tooBig}`)
+        console.log(`     Has data: ${att.data ? 'YES' : 'NO'} (${att.data ? att.data.substring(0, 50) + '...' : 'N/A'})`)
+      })
+    }
+
     const validationResult = validateTicketAnalysisPayload(body)
 
     if (!validationResult.success) {
@@ -104,6 +125,65 @@ Always follow these principles:
 - Consider the user experience and business impact
 - Ensure all requirements are testable and measurable`
 
+    // Process and upload images if includeImages is enabled
+    let uploadedImages: any[] = []
+    let imageAttachments: any[] = []
+    let commentImages: any[] = []
+
+    if (qaProfile.includeImages) {
+      console.log('🖼️ Processing images (includeImages = true)...')
+
+      // Prepare images for upload
+      const attachmentImages = prepareAttachmentImages(ticketJson.attachments)
+      const commentImageData = prepareCommentImages(ticketJson.comments)
+
+      console.log(`📎 Prepared ${attachmentImages.length} attachment images`)
+      console.log(`💬 Prepared ${commentImageData.length} comment images`)
+
+      // Upload images internally and get URLs
+      const allImages = [...attachmentImages, ...commentImageData]
+
+      if (allImages.length > 0) {
+        console.log(`🚀 Processing ${allImages.length} images internally...`)
+
+        try {
+          uploadedImages = await processAndUploadImages(allImages)
+          console.log(`✅ Successfully processed ${uploadedImages.length} images`)
+
+          // Log processed image details
+          uploadedImages.forEach((img, i) => {
+            console.log(`   ${i + 1}. ${img.originalName} -> ${img.url}`)
+            console.log(`       📏 Size: ${(img.size / 1024).toFixed(1)}KB (was ${(img.originalSize / 1024).toFixed(1)}KB)`)
+            console.log(`       📐 Dimensions: ${img.dimensions.width}x${img.dimensions.height}`)
+            console.log(`       🔧 Processed: ${img.processed ? 'Yes' : 'No'}`)
+            if (img.processingInfo) {
+              console.log(`       ⚙️ Processing: Quality=${img.processingInfo.qualityApplied}%, Resized=${img.processingInfo.resized}, Compressed=${img.processingInfo.compressed}`)
+            }
+            console.log(`       🌐 URL: ${img.absoluteUrl}`)
+          })
+
+          // Separate uploaded images by source
+          imageAttachments = uploadedImages.filter(img => img.source === 'attachment')
+          commentImages = uploadedImages.filter(img => img.source === 'comment')
+
+          console.log(`📊 Final counts: ${imageAttachments.length} attachments, ${commentImages.length} comments`)
+        } catch (uploadError) {
+          console.error('❌ Failed to process images:', uploadError)
+          // Continue without images
+          imageAttachments = []
+          commentImages = []
+        }
+      } else {
+        console.log('ℹ️ No images to process')
+      }
+    } else {
+      // Just get image info without uploading
+      imageAttachments = ticketJson.attachments.filter(attachment =>
+        attachment.mime.startsWith('image/') && !attachment.tooBig
+      )
+      commentImages = ticketJson.comments.flatMap(comment => comment.images || [])
+    }
+
     // Build detailed analysis prompt
     const analysisPrompt = `Analyze this Jira ticket and create comprehensive QA documentation:
 
@@ -125,10 +205,22 @@ ${ticketJson.components.length > 0 ? ticketJson.components.join(', ') : 'None sp
 **CUSTOM FIELDS:**
 ${Object.entries(ticketJson.customFields).map(([key, value]) => `- ${key}: ${value}`).join('\n')}
 
+**ATTACHMENTS:**
+${ticketJson.attachments.length > 0 ?
+        ticketJson.attachments.map(att => `- ${att.name} (${att.mime}, ${(att.size / 1024).toFixed(1)}KB)${att.tooBig ? ' [TOO BIG - NOT PROCESSED]' : ''}`).join('\n') :
+        'No attachments'}
+
+**IMAGES AVAILABLE:**
+${imageAttachments.length > 0 ?
+        `${imageAttachments.length} image(s) attached: ${imageAttachments.map(img => img.name).join(', ')}` :
+        'No images attached'}
+${commentImages.length > 0 ?
+        `\n${commentImages.length} image(s) in comments: ${commentImages.map(img => img.filename).join(', ')}` : ''}
+
 **COMMENTS (${ticketJson.comments.length} total):**
 ${ticketJson.comments.map((comment, index) =>
-      `${index + 1}. ${comment.author} (${comment.date}): ${comment.body.substring(0, 200)}${comment.body.length > 200 ? '...' : ''}`
-    ).join('\n')}
+          `${index + 1}. ${comment.author} (${comment.date}): ${comment.body.substring(0, 200)}${comment.body.length > 200 ? '...' : ''}`
+        ).join('\n')}
 
 **QA PROFILE SETTINGS:**
 - Test Case Format: ${qaProfile.testCaseFormat}
@@ -148,6 +240,8 @@ ${ticketJson.comments.map((comment, index) =>
         .filter(([_, active]) => active)
         .map(([category]) => category)
         .join(', ')}
+${qaProfile.includeImages && (imageAttachments.length > 0 || commentImages.length > 0) ?
+        '\n6. IMPORTANT: Analyze the provided images and incorporate visual information into your test cases and acceptance criteria. Consider UI elements, workflows, error states, and visual requirements shown in the images.' : ''}
 
 Generate a complete QACanvasDocument with all sections properly filled out.`
 
@@ -188,10 +282,13 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
       console.log('Schema being sent to AI providers:')
       console.log(JSON.stringify(qaCanvasDocumentSchema, null, 2))
 
-      // Use the new generateQADocumentWithFailover function
-      const generatedDocument = await generateQADocumentWithFailover<QACanvasDocument>(
+      // Use the new generateQADocumentWithFailover function with image support
+      const generatedDocument = await generateQADocumentWithImages<QACanvasDocument>(
         qaCanvasDocumentSchema,
         analysisPrompt,
+        imageAttachments,
+        commentImages,
+        qaProfile.includeImages,
         {
           temperature: 0.1,
           maxTokens: 4000
@@ -231,7 +328,7 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
           documentVersion: '1.0',
           aiModel: (() => {
             const primaryProvider = process.env.PRIMARY_PROVIDER || 'openai';
-            return primaryProvider === 'openai' 
+            return primaryProvider === 'openai'
               ? (process.env.OPENAI_MODEL || 'gpt-4o-mini')
               : (process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022');
           })(), // Usar el modelo del proveedor primario actual
@@ -243,7 +340,7 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
       }
 
       // Return the generated QA documentation with CORS headers
-      return NextResponse.json(enhancedDocument, { 
+      return NextResponse.json(enhancedDocument, {
         status: 200,
         headers: {
           'Access-Control-Allow-Origin': '*',
