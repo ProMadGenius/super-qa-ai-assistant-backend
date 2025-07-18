@@ -44,6 +44,21 @@ const updateCanvasPayloadSchema = z.object({
 type UpdateCanvasPayload = z.infer<typeof updateCanvasPayloadSchema>
 
 /**
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS(request: NextRequest) {
+  return new Response(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
+/**
  * POST /api/update-canvas
  * Handles conversational refinement of QA documentation through streaming responses
  */
@@ -156,8 +171,12 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
       }
     )
 
-    // Return streaming response compatible with useChat hook
-    return result.toDataStreamResponse()
+    // Return streaming response compatible with useChat hook with CORS headers
+    const response = result.toDataStreamResponse()
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    response.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    return response
 
   } catch (error) {
     return handleAIError(error, requestId)

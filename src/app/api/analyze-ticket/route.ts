@@ -16,6 +16,21 @@ import {
 import { v4 as uuidv4 } from 'uuid'
 
 /**
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
+/**
  * POST /api/analyze-ticket
  * 
  * Analyzes a Jira ticket and generates comprehensive QA documentation
@@ -227,8 +242,15 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
         }
       }
 
-      // Return the generated QA documentation
-      return NextResponse.json(enhancedDocument, { status: 200 })
+      // Return the generated QA documentation with CORS headers
+      return NextResponse.json(enhancedDocument, { 
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      })
     } catch (error) {
       console.error('Error generating complete document:', error)
       // Don't attempt partial generation, just throw the error to be handled by the outer catch

@@ -7,6 +7,15 @@ import { NextResponse } from 'next/server'
 import { getProviderHealthStatus } from './providerFailover'
 
 /**
+ * CORS headers for API responses
+ */
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+/**
  * Error types for AI operations
  */
 export enum AIErrorType {
@@ -48,7 +57,7 @@ export interface ErrorResponse {
  */
 export function handleAIError(error: unknown, requestId?: string): NextResponse<ErrorResponse> {
   console.error('AI Error:', error)
-  
+
   // Check for missing API key first
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
@@ -64,13 +73,13 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
           'Contact your administrator to set up API credentials'
         ]
       },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     )
   }
-  
+
   // Get current provider status for error context
   const providerStatus = getProviderHealthStatus();
-  
+
   // Handle circuit breaker errors
   if (error instanceof Error && error.message.includes('No available AI providers. All circuits are open')) {
     return NextResponse.json(
@@ -88,10 +97,10 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
           'Try again in a few minutes'
         ]
       },
-      { status: 503 }
+      { status: 503, headers: CORS_HEADERS }
     )
   }
-  
+
   // Handle failover errors
   if (error instanceof Error && error.message.includes('All providers failed after retries')) {
     return NextResponse.json(
@@ -109,16 +118,16 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
           'Wait a few minutes and try again'
         ]
       },
-      { status: 502 }
+      { status: 502, headers: CORS_HEADERS }
     )
   }
-  
+
   // Handle specific AI SDK errors
   if (error instanceof Error) {
     // Handle generation errors
-    if (error.message.includes('AI_NoObjectGeneratedError') || 
-        error.message.includes('failed to generate') ||
-        error.message.includes('AI processing failed')) {
+    if (error.message.includes('AI_NoObjectGeneratedError') ||
+      error.message.includes('failed to generate') ||
+      error.message.includes('AI processing failed')) {
       return NextResponse.json(
         {
           error: AIErrorType.AI_PROCESSING_ERROR,
@@ -136,15 +145,15 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Try again in a few moments'
           ]
         },
-        { status: 500 }
+        { status: 500, headers: CORS_HEADERS }
       )
     }
 
     // Handle rate limiting errors
-    if (error.message.toLowerCase().includes('rate limit') || 
-        error.message.toLowerCase().includes('quota')) {
+    if (error.message.toLowerCase().includes('rate limit') ||
+      error.message.toLowerCase().includes('quota')) {
       const provider = extractProviderFromError(error);
-      
+
       // If we know which provider had the rate limit, record the failure
       if (provider) {
         // This will help the circuit breaker track failures
@@ -158,7 +167,7 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
           console.error('Failed to update provider status:', e);
         }
       }
-      
+
       return NextResponse.json(
         {
           error: AIErrorType.RATE_LIMIT_EXCEEDED,
@@ -177,13 +186,13 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Contact your administrator if this persists'
           ]
         },
-        { status: 429 }
+        { status: 429, headers: CORS_HEADERS }
       )
     }
-    
+
     // Handle token limit errors
-    if (error.message.toLowerCase().includes('token') && 
-        error.message.toLowerCase().includes('limit')) {
+    if (error.message.toLowerCase().includes('token') &&
+      error.message.toLowerCase().includes('limit')) {
       return NextResponse.json(
         {
           error: AIErrorType.CONTEXT_LIMIT_ERROR,
@@ -199,15 +208,15 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Remove non-essential information from the ticket'
           ]
         },
-        { status: 413 }
+        { status: 413, headers: CORS_HEADERS }
       )
     }
 
     // Handle authentication errors
-    if (error.message.toLowerCase().includes('auth') || 
-        error.message.toLowerCase().includes('key') ||
-        error.message.toLowerCase().includes('unauthorized') ||
-        error.message.toLowerCase().includes('permission')) {
+    if (error.message.toLowerCase().includes('auth') ||
+      error.message.toLowerCase().includes('key') ||
+      error.message.toLowerCase().includes('unauthorized') ||
+      error.message.toLowerCase().includes('permission')) {
       return NextResponse.json(
         {
           error: AIErrorType.CONFIGURATION_ERROR,
@@ -223,13 +232,13 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Contact your administrator to verify API credentials'
           ]
         },
-        { status: 500 }
+        { status: 500, headers: CORS_HEADERS }
       )
     }
 
     // Handle timeout errors
-    if (error.message.toLowerCase().includes('timeout') || 
-        error.message.toLowerCase().includes('timed out')) {
+    if (error.message.toLowerCase().includes('timeout') ||
+      error.message.toLowerCase().includes('timed out')) {
       return NextResponse.json(
         {
           error: AIErrorType.TIMEOUT_ERROR,
@@ -245,15 +254,15 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Try again during a less busy time'
           ]
         },
-        { status: 504 }
+        { status: 504, headers: CORS_HEADERS }
       )
     }
 
     // Handle content filter errors
-    if (error.message.toLowerCase().includes('content') && 
-        (error.message.toLowerCase().includes('filter') || 
-         error.message.toLowerCase().includes('policy') ||
-         error.message.toLowerCase().includes('moderation'))) {
+    if (error.message.toLowerCase().includes('content') &&
+      (error.message.toLowerCase().includes('filter') ||
+        error.message.toLowerCase().includes('policy') ||
+        error.message.toLowerCase().includes('moderation'))) {
       return NextResponse.json(
         {
           error: AIErrorType.CONTENT_FILTER_ERROR,
@@ -269,14 +278,14 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Contact support if you believe this is an error'
           ]
         },
-        { status: 422 }
+        { status: 422, headers: CORS_HEADERS }
       )
     }
 
     // Handle provider-specific errors
-    if (error.message.toLowerCase().includes('openai') || 
-        error.message.toLowerCase().includes('anthropic') ||
-        error.message.toLowerCase().includes('provider')) {
+    if (error.message.toLowerCase().includes('openai') ||
+      error.message.toLowerCase().includes('anthropic') ||
+      error.message.toLowerCase().includes('provider')) {
       return NextResponse.json(
         {
           error: AIErrorType.PROVIDER_ERROR,
@@ -292,7 +301,7 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
             'Try switching to an alternative AI provider if available'
           ]
         },
-        { status: 502 }
+        { status: 502, headers: CORS_HEADERS }
       )
     }
   }
@@ -311,7 +320,7 @@ export function handleAIError(error: unknown, requestId?: string): NextResponse<
         'If the problem persists, contact support with the request ID'
       ]
     },
-    { status: 500 }
+    { status: 500, headers: CORS_HEADERS }
   )
 }
 
@@ -351,7 +360,7 @@ export function handleValidationError(issues: any[], requestId?: string): NextRe
       retryable: true,
       suggestions: generateValidationSuggestions(issues)
     },
-    { status: 400 }
+    { status: 400, headers: CORS_HEADERS }
   )
 }
 
@@ -360,28 +369,28 @@ export function handleValidationError(issues: any[], requestId?: string): NextRe
  */
 function generateValidationSuggestions(issues: any[]): string[] {
   const suggestions: string[] = [];
-  
+
   // Check for common validation issues and provide specific suggestions
   const hasMissingFields = issues.some(issue => issue.code === 'invalid_type' && issue.received === 'undefined');
   const hasInvalidEnums = issues.some(issue => issue.code === 'invalid_enum_value');
   const hasInvalidFormats = issues.some(issue => issue.code === 'invalid_string');
-  
+
   if (hasMissingFields) {
     suggestions.push('Check for missing required fields in your request');
   }
-  
+
   if (hasInvalidEnums) {
     suggestions.push('Verify that enum values match the expected options');
   }
-  
+
   if (hasInvalidFormats) {
     suggestions.push('Ensure string formats (dates, emails, etc.) are correctly formatted');
   }
-  
+
   // Add general suggestions
   suggestions.push('Review the API documentation for correct payload structure');
   suggestions.push('Validate your JSON structure before sending');
-  
+
   return suggestions;
 }
 
@@ -390,7 +399,7 @@ function generateValidationSuggestions(issues: any[]): string[] {
  */
 function extractProviderFromError(error: Error): string | undefined {
   const errorMsg = error.message.toLowerCase();
-  
+
   if (errorMsg.includes('openai')) {
     return 'openai';
   } else if (errorMsg.includes('anthropic')) {
@@ -398,7 +407,7 @@ function extractProviderFromError(error: Error): string | undefined {
   } else if (errorMsg.includes('ai-sdk')) {
     return 'ai-sdk';
   }
-  
+
   return undefined;
 }
 
@@ -407,14 +416,14 @@ function extractProviderFromError(error: Error): string | undefined {
  */
 function extractModelFromError(error: Error): string | undefined {
   const errorMsg = error.message;
-  
+
   // Try to extract model names like gpt-4, gpt-3.5-turbo, claude-2, etc.
   const modelMatches = errorMsg.match(/gpt-\d+(?:-\w+)?|claude-\d+(?:\.\d+)?|o4-(?:mini|preview|full)|gpt-4o(?:-mini)?/i);
-  
+
   if (modelMatches && modelMatches[0]) {
     return modelMatches[0].toLowerCase();
   }
-  
+
   return undefined;
 }
 
@@ -423,20 +432,20 @@ function extractModelFromError(error: Error): string | undefined {
  */
 function calculateRetryAfter(error: Error): number {
   const errorMsg = error.message.toLowerCase();
-  
+
   // Try to extract retry time from error message
   const retryMatches = errorMsg.match(/retry after (\d+)/i);
   if (retryMatches && retryMatches[1]) {
     return parseInt(retryMatches[1], 10);
   }
-  
+
   // Default retry times based on error type
   if (errorMsg.includes('rate limit')) {
     return 60; // 1 minute for rate limits
   } else if (errorMsg.includes('quota')) {
     return 3600; // 1 hour for quota issues
   }
-  
+
   return 30; // Default 30 seconds
 }
 

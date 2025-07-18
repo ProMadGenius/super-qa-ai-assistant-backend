@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+/**
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
 // Import the reset function - we'll use dynamic import to handle TypeScript
 export async function POST(request: NextRequest) {
   try {
@@ -20,6 +35,12 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'All circuit breakers have been reset successfully',
       providerStatus: status
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      }
     });
   } catch (error) {
     console.error('❌ Error resetting circuit breakers:', error);
@@ -29,7 +50,14 @@ export async function POST(request: NextRequest) {
         error: 'Failed to reset circuit breakers',
         details: error instanceof Error ? error.message : String(error)
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      }
     );
   }
 }
@@ -42,6 +70,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       providerStatus: status
+    }, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      }
     });
   } catch (error) {
     return NextResponse.json(
@@ -50,7 +84,14 @@ export async function GET(request: NextRequest) {
         error: 'Failed to get provider status',
         details: error instanceof Error ? error.message : String(error)
       },
-      { status: 500 }
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      }
     );
   }
 }

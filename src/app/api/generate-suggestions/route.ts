@@ -53,6 +53,21 @@ const generateSuggestionsPayloadSchema = z.object({
 type GenerateSuggestionsPayload = z.infer<typeof generateSuggestionsPayloadSchema>
 
 /**
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
+}
+
+/**
  * POST /api/generate-suggestions
  * Generates contextual QA suggestions based on current document content
  */
@@ -69,7 +84,14 @@ export async function POST(request: NextRequest) {
           message: 'API key is not configured',
           details: 'OpenAI API key is required for AI processing'
         },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          }
+        }
       )
     }
 
@@ -223,7 +245,14 @@ export async function POST(request: NextRequest) {
             message: 'Failed to parse AI response',
             details: 'AI returned invalid response format'
           },
-          { status: 500 }
+          { 
+            status: 500,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            }
+          }
         )
       }
       
@@ -240,7 +269,14 @@ export async function POST(request: NextRequest) {
           message: `AI processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
           details: error instanceof Error ? error.stack : undefined
         },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          }
+        }
       )
     }
     
@@ -331,7 +367,14 @@ export async function POST(request: NextRequest) {
             'Try again with different parameters'
           ]
         },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          }
+        }
       )
     }
 
@@ -343,7 +386,14 @@ export async function POST(request: NextRequest) {
       contextSummary: buildContextSummary(currentDocument as QACanvasDocument)
     }
 
-    return NextResponse.json(response, { status: 200 })
+    return NextResponse.json(response, { 
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      }
+    })
 
   } catch (error) {
     console.error('API Route Error:', error)
