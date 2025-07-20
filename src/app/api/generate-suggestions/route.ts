@@ -195,36 +195,38 @@ export async function POST(request: NextRequest) {
     // Document any assumptions we need to make
     documentAssumptions(['Processing QA suggestions request with intent analysis'])
 
-    // Generate suggestions using AI with intent-based filtering
+    // Generate suggestions using efficient parallel approach
     const suggestions: QASuggestion[] = []
+    const generatedSuggestions = new Set<string>() // Track titles to avoid duplicates
 
-    // Build comprehensive prompt for AI suggestion generation
-    const aiPrompt = suggestionPrompt
+    console.log(`🤖 Generating ${maxSuggestions} AI suggestions efficiently...`)
 
-    // Generate all suggestions using AI
-    for (let i = 0; i < maxSuggestions; i++) {
+    // Create array of promises for parallel generation
+    const suggestionPromises = Array.from({ length: maxSuggestions }, async (_, index) => {
       try {
-        console.log(`🤖 Generating AI suggestion ${i + 1} of ${maxSuggestions}`)
+        const suggestionNumber = index + 1
+        const previousTitles = Array.from(generatedSuggestions).join(', ')
+        
+        const contextualPrompt = `${suggestionPrompt}\n\n**GENERATE SUGGESTION ${suggestionNumber} of ${maxSuggestions}**\n\nMake this suggestion unique and different from any previous suggestions.${previousTitles ? `\n\nPrevious suggestions to avoid duplicating: ${previousTitles}` : ''}\n\nFocus on a different aspect of QA improvement.`
 
         const aiResponse = await generateTextWithFailover(
-          `${aiPrompt}\n\nGenerate suggestion ${i + 1} of ${maxSuggestions}. Make it unique and different from any previous suggestions.`,
+          contextualPrompt,
           {
             system: getSuggestionSystemPrompt(),
             tools: { qaSuggestionTool },
-            temperature: 0.4 + (i * 0.1), // Increase temperature for variety
+            temperature: 0.4 + (index * 0.1), // Increase temperature for variety
             maxTokens: 1000,
+            toolChoice: 'required'
           }
         )
 
         // Validate AI response format
         if (typeof aiResponse === 'string' || !aiResponse || !aiResponse.toolCalls) {
-          console.warn(`Invalid AI response format for suggestion ${i + 1}:`, aiResponse)
-          continue
+          console.warn(`Invalid AI response format for suggestion ${suggestionNumber}:`, aiResponse)
+          return null
         }
 
         const { toolCalls } = aiResponse
-
-        // Extract suggestion from tool calls
         if (toolCalls && toolCalls.length > 0) {
           const toolCall = toolCalls[0]
           if (toolCall.toolName === 'qaSuggestionTool') {
@@ -232,14 +234,22 @@ export async function POST(request: NextRequest) {
 
             // Apply focus areas and exclude types filtering
             if (focusAreas && focusAreas.length > 0 && !focusAreas.includes(suggestionData.suggestionType)) {
-              console.log(`🔍 Skipping suggestion ${i + 1} - not in focus areas`)
-              continue
+              console.log(`🔍 Skipping suggestion ${suggestionNumber} - not in focus areas: ${suggestionData.suggestionType}`)
+              return null
             }
 
             if (excludeTypes && excludeTypes.length > 0 && excludeTypes.includes(suggestionData.suggestionType)) {
-              console.log(`🚫 Skipping suggestion ${i + 1} - in exclude types`)
-              continue
+              console.log(`🚫 Skipping suggestion ${suggestionNumber} - in exclude types: ${suggestionData.suggestionType}`)
+              return null
             }
+
+            // Check for duplicate titles
+            if (generatedSuggestions.has(suggestionData.title)) {
+              console.log(`🔄 Skipping suggestion ${suggestionNumber} - duplicate title: ${suggestionData.title}`)
+              return null
+            }
+
+            generatedSuggestions.add(suggestionData.title)
 
             const suggestion = createQASuggestion({
               suggestionType: suggestionData.suggestionType,
@@ -248,20 +258,37 @@ export async function POST(request: NextRequest) {
               targetSection: suggestionData.targetSection,
               priority: suggestionData.priority || 'medium',
               reasoning: suggestionData.reasoning,
-              implementationHint: suggestionData.implementationHint,
+              implementationHint: suggestionData.implementationHint || 'No specific implementation hint',
               relatedRequirements: [], // Could be enhanced to extract from document
               estimatedEffort: suggestionData.estimatedEffort || 'medium',
               tags: suggestionData.tags || []
             })
 
-            suggestions.push(suggestion)
-            console.log(`✅ Generated suggestion ${i + 1}: ${suggestion.title}`)
+            console.log(`✅ Generated suggestion ${suggestionNumber}: ${suggestion.title}`)
+            return suggestion
           }
         }
+        return null
       } catch (error) {
-        console.warn(`❌ Failed to generate AI suggestion ${i + 1}:`, error)
-        // Continue with other suggestions even if one fails
+        console.warn(`❌ Failed to generate suggestion ${index + 1}:`, error)
+        return null
       }
+    })
+
+    // Execute all promises in parallel for speed
+    try {
+      const results = await Promise.all(suggestionPromises)
+      
+      // Filter out null results and add to suggestions array
+      results.forEach(suggestion => {
+        if (suggestion) {
+          suggestions.push(suggestion)
+        }
+      })
+      
+      console.log(`🎯 Successfully generated ${suggestions.length} out of ${maxSuggestions} requested suggestions`)
+    } catch (error) {
+      console.error('❌ Failed to generate suggestions in parallel:', error)
     }
 
     // If no suggestions were generated, return an error
@@ -418,7 +445,11 @@ function getSuggestionSystemPrompt(): string {
 - **Security Tests**: Authentication, authorization, data protection
 - **Integration Tests**: API interactions, third-party services, data flow
 
-Always use the qaSuggestionTool to structure your suggestions properly.`
+**CRITICAL INSTRUCTION**: You MUST make multiple tool calls to generate the requested number of suggestions. For each suggestion you want to provide, make a separate call to qaSuggestionTool. Do not try to combine multiple suggestions into one tool call.
+
+Example: If asked for 3 suggestions, make 3 separate qaSuggestionTool calls.
+
+Generate diverse, complementary suggestions that cover different aspects of QA improvement.`
 }
 
 /**
@@ -515,6 +546,8 @@ ${targetSections && targetSections.length > 0
 6. **Prioritize based on risk** and business impact
 7. **Ensure suggestions are specific** and not generic advice
 ${intentAnalysisResult ? '8. **Align with user intent** and provide contextually relevant suggestions' : ''}
+
+**IMPORTANT**: Generate exactly ${maxSuggestions} unique, diverse suggestions using the qaSuggestionTool. Each suggestion should be different and complementary to the others. Avoid duplicates and ensure variety in suggestion types and target sections.
 
 Generate suggestions that will genuinely improve the quality and completeness of this QA documentation.`
 }

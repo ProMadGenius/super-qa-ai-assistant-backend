@@ -1,10 +1,10 @@
 /**
- * IntentAnalyzer - Core component for analyzing user intent in QA conversations
- * Determines whether user wants to modify canvas, ask for clarification, get information, or is off-topic
+ * IntentAnalyzer - AI-powered component for analyzing user intent in QA conversations
+ * Uses pure AI classification without hardcoded keywords for language-agnostic intent detection
  */
 
-import { generateText, tool } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { tool } from 'ai'
+import { generateTextWithFailover } from '../providerFailover'
 import { z } from 'zod'
 import type { UIMessage } from 'ai'
 import type {
@@ -16,28 +16,26 @@ import type {
 } from './types'
 import type { QACanvasDocument } from '../../schemas/QACanvasDocument'
 import {
-  INTENT_KEYWORDS,
-  SECTION_KEYWORDS
-} from './constants'
-import {
   intentTypeSchema,
   canvasSectionSchema,
   intentAnalysisResultSchema
 } from './types'
 
 /**
- * AI tool for intent classification
+ * AI tool for pure intent classification - no hardcoded keywords needed
  */
 const intentClassificationTool = tool({
-  description: "Classify user intent for QA canvas interactions with high accuracy",
+  description: "Classify user intent for QA canvas interactions using AI analysis only",
   parameters: z.object({
-    intent: intentTypeSchema.describe("Primary intent classification"),
-    confidence: z.number().min(0).max(1).describe("Confidence score for classification"),
-    targetSections: z.array(canvasSectionSchema).describe("Canvas sections that would be affected"),
-    reasoning: z.string().describe("Detailed explanation of classification decision"),
-    keywords: z.array(z.string()).describe("Key terms that influenced classification"),
+    intent: intentTypeSchema.describe("Primary intent classification based on user message context"),
+    confidence: z.number().min(0).max(1).describe("AI confidence score for this classification"),
+    targetSections: z.array(canvasSectionSchema).describe("Canvas sections the user wants to modify or reference"),
+    reasoning: z.string().describe("Clear explanation of why this intent was chosen"),
+    detectedLanguage: z.string().describe("Language detected in user message (e.g., 'spanish', 'english', 'mixed')"),
     shouldModifyCanvas: z.boolean().describe("Whether this intent requires canvas modification"),
-    requiresClarification: z.boolean().describe("Whether clarification is needed before proceeding")
+    requiresClarification: z.boolean().describe("Whether the message is too vague and needs clarification"),
+    urgencyLevel: z.enum(['low', 'medium', 'high']).describe("Perceived urgency of the user request"),
+    contextualHints: z.array(z.string()).describe("Key phrases or context clues that influenced the decision")
   })
 })
 
@@ -45,10 +43,10 @@ const intentClassificationTool = tool({
  * IntentAnalyzer class for analyzing user messages and determining intent
  */
 export class IntentAnalyzer {
-  private readonly model = openai('gpt-4o-mini')
+  // No need for model instance - using failover system
 
   /**
-   * Analyze user intent from message and context
+   * Analyze user intent using pure AI classification - no hardcoded keywords
    */
   async analyzeIntent(
     userMessage: string,
@@ -56,34 +54,43 @@ export class IntentAnalyzer {
     currentCanvas?: QACanvasDocument
   ): Promise<IntentAnalysisResult> {
     try {
+      console.log('🤖 Starting AI-powered intent analysis...')
+      
       // Build analysis context
       const context = this.buildAnalysisContext(conversationHistory, currentCanvas)
 
-      // Perform keyword-based pre-analysis
-      const keywordAnalysis = this.performKeywordAnalysis(userMessage)
-
-      // Use AI for detailed intent classification
-      const aiAnalysis = await this.performAIAnalysis(
+      // Use AI for complete intent classification
+      const aiResult = await this.performPureAIAnalysis(
         userMessage,
         conversationHistory,
         currentCanvas,
-        context,
-        keywordAnalysis
+        context
       )
 
-      // Combine keyword and AI analysis
-      const finalResult = this.combineAnalysisResults(keywordAnalysis, aiAnalysis, context)
+      // Build final result with context
+      const finalResult: IntentAnalysisResult = {
+        intent: aiResult.intent,
+        confidence: aiResult.confidence,
+        targetSections: aiResult.targetSections,
+        context,
+        reasoning: aiResult.reasoning,
+        keywords: aiResult.contextualHints || [], // Use AI-detected hints instead of hardcoded keywords
+        shouldModifyCanvas: aiResult.shouldModifyCanvas,
+        requiresClarification: aiResult.requiresClarification
+      }
 
       // Validate result
       const validationResult = intentAnalysisResultSchema.safeParse(finalResult)
       if (!validationResult.success) {
-        throw new Error(`Intent analysis result validation failed: ${validationResult.error.message}`)
+        console.warn('Intent analysis validation failed, using fallback:', validationResult.error.message)
+        return this.createFallbackResult(userMessage, new Error('Validation failed'))
       }
 
+      console.log(`✅ Intent classified: ${finalResult.intent} (confidence: ${finalResult.confidence})`)
       return finalResult
 
     } catch (error) {
-      console.error('Intent analysis failed:', error)
+      console.error('❌ Intent analysis failed:', error)
       return this.createFallbackResult(userMessage, error as Error)
     }
   }
@@ -128,199 +135,148 @@ export class IntentAnalyzer {
   }
 
   /**
-   * Perform keyword-based analysis for quick classification
+   * Perform pure AI-based intent analysis without hardcoded keywords
    */
-  private performKeywordAnalysis(userMessage: string): Partial<IntentAnalysisResult> {
-    const messageLower = userMessage.toLowerCase()
-    const detectedKeywords: string[] = []
-    const targetSections: CanvasSection[] = []
-
-    // Check for intent keywords
-    let likelyIntent: IntentType | null = null
-    let maxKeywordMatches = 0
-
-    for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
-      const matches = keywords.filter(keyword => messageLower.includes(keyword.toLowerCase()))
-      if (matches.length > maxKeywordMatches) {
-        maxKeywordMatches = matches.length
-        likelyIntent = intent as IntentType
-        detectedKeywords.push(...matches)
-      }
-    }
-
-    // Check for section keywords
-    for (const [section, keywords] of Object.entries(SECTION_KEYWORDS)) {
-      const matches = keywords.filter(keyword => messageLower.includes(keyword.toLowerCase()))
-      if (matches.length > 0) {
-        targetSections.push(section as CanvasSection)
-        detectedKeywords.push(...matches)
-      }
-    }
-
-    // Be more decisive - if we have any section keywords, assume modification intent
-    if (targetSections.length > 0 && !likelyIntent) {
-      likelyIntent = 'modify_canvas'
-      maxKeywordMatches = Math.max(maxKeywordMatches, 1)
-    }
-
-    // If no specific intent but message seems like a complaint/request, assume modification
-    if (!likelyIntent && this.seemsLikeModificationRequest(messageLower)) {
-      likelyIntent = 'modify_canvas'
-      maxKeywordMatches = Math.max(maxKeywordMatches, 1)
-      // If no specific sections, assume they want to modify acceptance criteria (most common)
-      if (targetSections.length === 0) {
-        targetSections.push('acceptanceCriteria')
-      }
-    }
-
-    // Determine confidence - be more confident in our decisions
-    const confidence = Math.min(0.9, Math.max(0.6, maxKeywordMatches * 0.3 + 0.4))
-
-    return {
-      intent: likelyIntent || 'modify_canvas', // Default to modification instead of clarification
-      confidence,
-      targetSections,
-      keywords: [...new Set(detectedKeywords)], // Remove duplicates
-      shouldModifyCanvas: (likelyIntent === 'modify_canvas') || (!likelyIntent && targetSections.length > 0),
-      requiresClarification: false // Be less likely to require clarification
-    }
-  }
-
-  /**
-   * Check if message seems like a modification request even without specific keywords
-   */
-  private seemsLikeModificationRequest(messageLower: string): boolean {
-    const modificationIndicators = [
-      // Spanish indicators
-      'mal', 'incorrecto', 'error', 'problema', 'falta', 'necesita', 'debería', 'mejor',
-      'cambio', 'actualiza', 'corrige', 'mejora', 'agrega', 'quita', 'elimina',
-      // English indicators  
-      'wrong', 'incorrect', 'error', 'problem', 'missing', 'needs', 'should', 'better',
-      'change', 'update', 'fix', 'improve', 'add', 'remove', 'delete'
-    ]
-
-    return modificationIndicators.some(indicator => messageLower.includes(indicator))
-  }
-
-  /**
-   * Perform AI-based analysis for detailed classification
-   */
-  private async performAIAnalysis(
+  private async performPureAIAnalysis(
     userMessage: string,
     conversationHistory: UIMessage[],
     currentCanvas?: QACanvasDocument,
-    context?: AnalysisContext,
-    keywordHints?: Partial<IntentAnalysisResult>
-  ): Promise<Partial<IntentAnalysisResult>> {
-
-    const systemPrompt = this.buildSystemPrompt(currentCanvas, context, keywordHints)
+    context?: AnalysisContext
+  ): Promise<{
+    intent: IntentType
+    confidence: number
+    targetSections: CanvasSection[]
+    reasoning: string
+    contextualHints: string[]
+    shouldModifyCanvas: boolean
+    requiresClarification: boolean
+    detectedLanguage: string
+    urgencyLevel: 'low' | 'medium' | 'high'
+  }> {
+    const systemPrompt = this.buildAISystemPrompt(currentCanvas, context)
     const conversationContext = this.buildConversationContext(conversationHistory)
 
     try {
-      const result = await generateText({
-        model: this.model,
-        system: systemPrompt,
-        prompt: `
-Analiza el siguiente mensaje del usuario y clasifica su intención:
+      console.log('🧠 Sending message to AI for intent classification...')
+      
+      const result = await generateTextWithFailover(
+        `
+Analyze this user message and classify their intent with high confidence:
 
-Mensaje del usuario: "${userMessage}"
+USER MESSAGE: "${userMessage}"
 
-Contexto de la conversación:
+CONVERSATION CONTEXT:
 ${conversationContext}
 
 ${currentCanvas ? `
-Estado actual del lienzo:
-- Criterios de aceptación: ${currentCanvas.acceptanceCriteria.length} items
-- Casos de prueba: ${currentCanvas.testCases.length} items
-- Advertencias: ${currentCanvas.configurationWarnings.length} items
-- Resumen del ticket: ${currentCanvas.ticketSummary.problem ? 'Presente' : 'Ausente'}
-` : 'No hay lienzo actual disponible.'}
+CURRENT CANVAS STATE:
+- Acceptance Criteria: ${currentCanvas.acceptanceCriteria.length} items
+- Test Cases: ${currentCanvas.testCases.length} items  
+- Configuration Warnings: ${currentCanvas.configurationWarnings.length} items
+- Ticket Summary: ${currentCanvas.ticketSummary.problem ? 'Present' : 'Missing'}
+- Ticket ID: ${currentCanvas.metadata.ticketId}
+` : 'No canvas currently available.'}
 
-Pistas del análisis de palabras clave:
-- Intención sugerida: ${keywordHints?.intent || 'No detectada'}
-- Secciones objetivo: ${keywordHints?.targetSections?.join(', ') || 'Ninguna'}
-- Palabras clave: ${keywordHints?.keywords?.join(', ') || 'Ninguna'}
-
-Clasifica la intención y proporciona un análisis detallado.
+Classify the intent and provide detailed analysis. Be decisive and confident in your classification.
         `,
-        tools: { intentClassification: intentClassificationTool },
-        toolChoice: 'required',
-        maxTokens: 1000,
-        temperature: 0.1
-      })
+        {
+          system: systemPrompt,
+          tools: { intentClassification: intentClassificationTool },
+          toolChoice: 'required',
+          maxTokens: 1000,
+          temperature: 0.1 // Low temperature for consistent classification
+        }
+      )
 
-      const toolCall = result.toolCalls[0]
-      if (toolCall?.toolName === 'intentClassification') {
-        return toolCall.args as Partial<IntentAnalysisResult>
+      // Handle both string and object responses from failover system
+      if (typeof result === 'string') {
+        throw new Error('Intent analysis received text response instead of tool calls')
       }
 
-      throw new Error('AI analysis did not return expected tool call')
+      const toolCall = result.toolCalls?.[0]
+      if (toolCall?.toolName === 'intentClassification') {
+        const args = toolCall.args
+        console.log(`🎯 AI classified intent: ${args.intent} (${args.confidence}) - ${args.reasoning}`)
+        return args as any
+      }
+
+      throw new Error('AI did not return expected intent classification')
 
     } catch (error) {
-      console.error('AI analysis failed:', error)
-      // Return keyword analysis as fallback
-      return keywordHints || {}
+      console.error('❌ AI analysis failed:', error)
+      throw error
     }
   }
 
+
+
   /**
-   * Build system prompt for AI analysis
+   * Build AI system prompt for pure intent classification
    */
-  private buildSystemPrompt(
+  private buildAISystemPrompt(
     currentCanvas?: QACanvasDocument,
-    context?: AnalysisContext,
-    keywordHints?: Partial<IntentAnalysisResult>
+    context?: AnalysisContext
   ): string {
     return `
-Eres un experto analista de intenciones para un sistema de QA que ayuda a analizar tickets de Jira y generar documentación de pruebas.
+You are an expert intent classifier for a QA system that helps analyze Jira tickets and generate test documentation.
 
-Tu trabajo es clasificar la intención del usuario de manera DECISIVA y PRÁCTICA. Evita pedir clarificación a menos que sea absolutamente necesario.
+Your job is to classify user intent DECISIVELY and PRACTICALLY using only AI analysis - no hardcoded keywords needed.
 
-CATEGORÍAS DE INTENCIÓN:
+INTENT CATEGORIES:
 
-1. **modify_canvas**: El usuario quiere modificar el contenido del lienzo (criterios, test cases, etc.)
-   - Indicadores: "cambiar", "modificar", "actualizar", "corregir", "mejorar", "mal", "incorrecto", "error", "problema", "falta", "necesita", "debería", "mejor"
-   - ESTA ES LA INTENCIÓN MÁS COMÚN - cuando hay duda, elige esta
+1. **modify_canvas**: User wants to modify canvas content (criteria, test cases, etc.)
+   - This is the MOST COMMON intent - when in doubt, choose this
+   - Examples: complaints, corrections, improvements, additions, changes
+   - Any indication something is wrong, missing, or needs improvement
 
-2. **ask_clarification**: SOLO cuando el usuario es extremadamente vago y no hay forma de inferir qué quiere
-   - Indicadores: mensajes de una sola palabra como "mal" sin contexto
-   - USA ESTA CATEGORÍA MUY RARAMENTE
+2. **ask_clarification**: ONLY when user message is extremely vague and incomprehensible
+   - Use this category VERY RARELY (less than 5% of cases)
+   - Only for completely unclear single-word messages without context
 
-3. **provide_information**: El usuario quiere información sin modificar el documento
-   - Indicadores: "¿qué significa?", "explícame", "¿cómo funciona?", "¿qué es?"
-   - Preguntas directas sobre contenido existente
+3. **provide_information**: User wants information without modifying the document
+   - Questions about existing content: "what does this mean?", "explain this"
+   - Requests for explanations of current state
 
-4. **request_explanation**: El usuario quiere explicación del contenido existente
-   - Indicadores: "explica", "ayúdame a entender", "¿por qué?"
-   - Similar a provide_information pero más específico sobre explicaciones
+4. **request_explanation**: User wants detailed explanation of existing content
+   - Similar to provide_information but more specific about explanations
+   - "explain why", "help me understand", "how does this work"
 
-5. **off_topic**: El usuario pregunta sobre temas no relacionados con QA/testing
-   - Indicadores: deportes, clima, comida, entretenimiento, etc.
+5. **off_topic**: User asks about non-QA/testing topics
+   - Sports, weather, food, entertainment, personal topics, etc.
 
-REGLAS CRÍTICAS:
-- SÉ DECISIVO: Si hay cualquier indicación de que quieren cambiar algo → modify_canvas
-- NO PIDAS CLARIFICACIÓN a menos que el mensaje sea completamente incomprensible
-- Si mencionan cualquier sección (criterios, test cases, etc.) → modify_canvas
-- Si dicen que algo "está mal", "es incorrecto", "tiene errores" → modify_canvas
-- Si no especifican sección pero quieren cambios → asume acceptanceCriteria (más común)
-- Confianza alta (0.7+) para decisiones claras
-- requiresClarification = false en 95% de los casos
+CRITICAL RULES:
+- BE DECISIVE: Any indication of wanting changes → modify_canvas
+- DON'T ASK FOR CLARIFICATION unless message is completely incomprehensible
+- If they mention any section (criteria, test cases, etc.) → modify_canvas  
+- If they say something is wrong, incorrect, has errors → modify_canvas
+- If no specific section mentioned but want changes → assume acceptanceCriteria (most common)
+- High confidence (0.7+) for clear decisions
+- requiresClarification = false in 95% of cases
+- Work in ANY LANGUAGE - Spanish, English, mixed, or others
 
-EJEMPLOS DE DECISIONES CORRECTAS:
+LANGUAGE DETECTION:
+- Detect the primary language of the user message
+- Provide appropriate responses regardless of language
+- Handle mixed-language messages appropriately
+
+DECISION EXAMPLES (any language):
 - "Los criterios están mal" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.8
-- "Esto no está bien" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.7
+- "This is wrong" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.8  
 - "Falta información" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.7
-- "Necesita mejoras" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.7
+- "Missing info" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.7
+- "Needs improvement" → modify_canvas, targetSections: ['acceptanceCriteria'], confidence: 0.7
+- "¿Qué significa esto?" → provide_information, confidence: 0.8
+- "What does this mean?" → provide_information, confidence: 0.8
 
-Contexto actual:
+CONTEXT AWARENESS:
 ${context ? `
-- Tiene lienzo: ${context.hasCanvas}
-- Complejidad: ${context.canvasComplexity}
-- Longitud conversación: ${context.conversationLength}
-- Secciones disponibles: ${context.availableSections.join(', ')}
-` : 'Sin contexto disponible'}
+- Has Canvas: ${context.hasCanvas}
+- Canvas Complexity: ${context.canvasComplexity}
+- Conversation Length: ${context.conversationLength}
+- Available Sections: ${context.availableSections.join(', ')}
+` : 'No context available'}
 
-Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas'}
+Be confident, decisive, and language-agnostic in your classifications.
     `
   }
 
@@ -361,84 +317,31 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
   }
 
   /**
-   * Extract last user intent from conversation history
+   * Extract last user intent from conversation history using AI context
    */
   private extractLastUserIntent(conversationHistory: UIMessage[]): IntentType | undefined {
-    // This is a simplified implementation
-    // In a real system, you might store intent metadata in message metadata
     const lastUserMessage = conversationHistory
       .filter(msg => msg.role === 'user')
       .pop()
 
     if (!lastUserMessage) return undefined
 
-    // Simple keyword-based detection for last intent
-    const messageText = this.extractTextFromMessage(lastUserMessage).toLowerCase()
-
-    if (INTENT_KEYWORDS.modify_canvas.some(keyword => messageText.includes(keyword))) {
-      return 'modify_canvas'
-    }
-    if (INTENT_KEYWORDS.provide_information.some(keyword => messageText.includes(keyword))) {
-      return 'provide_information'
-    }
-
+    // In pure AI approach, we don't try to guess from keywords
+    // We let the AI handle all context analysis
     return undefined
   }
 
   /**
-   * Combine keyword and AI analysis results
-   */
-  private combineAnalysisResults(
-    keywordAnalysis: Partial<IntentAnalysisResult>,
-    aiAnalysis: Partial<IntentAnalysisResult>,
-    context: AnalysisContext
-  ): IntentAnalysisResult {
-    // AI analysis takes precedence, but we use keyword analysis as fallback
-    const intent = aiAnalysis.intent || keywordAnalysis.intent || 'ask_clarification'
-    const confidence = Math.max(
-      aiAnalysis.confidence || 0,
-      keywordAnalysis.confidence || 0
-    )
-
-    // Combine target sections from both analyses
-    const targetSections = [
-      ...(aiAnalysis.targetSections || []),
-      ...(keywordAnalysis.targetSections || [])
-    ]
-    const uniqueTargetSections = [...new Set(targetSections)]
-
-    // Combine keywords
-    const keywords = [
-      ...(aiAnalysis.keywords || []),
-      ...(keywordAnalysis.keywords || [])
-    ]
-    const uniqueKeywords = [...new Set(keywords)]
-
-    return {
-      intent,
-      confidence: Math.min(confidence, 1.0),
-      targetSections: uniqueTargetSections,
-      context,
-      reasoning: aiAnalysis.reasoning || keywordAnalysis.reasoning || 'Combined keyword and AI analysis',
-      keywords: uniqueKeywords,
-      shouldModifyCanvas: aiAnalysis.shouldModifyCanvas ?? keywordAnalysis.shouldModifyCanvas ?? false,
-      requiresClarification: aiAnalysis.requiresClarification ?? keywordAnalysis.requiresClarification ?? false
-    }
-  }
-
-  /**
-   * Create fallback result when analysis fails
+   * Create fallback result when AI analysis fails
    */
   private createFallbackResult(userMessage: string, error: Error): IntentAnalysisResult {
-    console.warn('Using fallback intent analysis due to error:', error.message)
+    console.warn('🚨 Using fallback intent analysis due to AI error:', error.message)
 
-    // Even in fallback, try to be decisive - assume modification intent
-    const messageLower = userMessage.toLowerCase()
-    const seemsLikeModification = this.seemsLikeModificationRequest(messageLower)
-
+    // Smart fallback: assume modification intent (most common case)
+    // This is safer than asking for clarification when AI fails
     return {
-      intent: seemsLikeModification ? 'modify_canvas' : 'modify_canvas', // Always default to modification
-      confidence: seemsLikeModification ? 0.6 : 0.5,
+      intent: 'modify_canvas', // Always default to modification - safest assumption
+      confidence: 0.5, // Lower confidence since this is fallback
       targetSections: ['acceptanceCriteria'], // Default to most common section
       context: {
         hasCanvas: false,
@@ -446,10 +349,10 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
         conversationLength: 0,
         availableSections: []
       },
-      reasoning: `Fallback analysis due to error: ${error.message}. Defaulting to canvas modification.`,
-      keywords: [],
+      reasoning: `AI intent analysis failed (${error.message}). Using fallback assumption: user wants to modify canvas content.`,
+      keywords: [], // No keywords in pure AI approach
       shouldModifyCanvas: true,
-      requiresClarification: false // Don't require clarification even in fallback
+      requiresClarification: false // Don't require clarification even in fallback - be decisive
     }
   }
 

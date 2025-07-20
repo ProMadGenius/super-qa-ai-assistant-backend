@@ -1,34 +1,32 @@
 /**
- * SectionTargetDetector - Identifies which canvas sections need modification
- * Uses keyword matching and AI analysis to detect target sections with high accuracy
+ * SectionTargetDetector - AI-powered identification of canvas sections needing modification
+ * Uses pure AI analysis without hardcoded keywords for language-agnostic section detection
  */
 
-import { generateText, tool } from 'ai'
-import { openai } from '@ai-sdk/openai'
+import { tool } from 'ai'
+import { generateTextWithFailover } from '../providerFailover'
 import { z } from 'zod'
 import type { 
   SectionTargetResult, 
   CanvasSection 
 } from './types'
 import type { QACanvasDocument } from '../../schemas/QACanvasDocument'
-import { 
-  SECTION_KEYWORDS, 
-  CONFIDENCE_THRESHOLDS 
-} from './constants'
 import { canvasSectionSchema } from './types'
 
 /**
- * AI tool for section target detection
+ * AI tool for pure section target detection - no hardcoded keywords needed
  */
 const sectionTargetDetectionTool = tool({
-  description: "Identify which canvas sections should be targeted for modification based on user message",
+  description: "Identify which canvas sections should be targeted for modification using AI analysis only",
   parameters: z.object({
-    primaryTargets: z.array(canvasSectionSchema).describe("Main sections that should be modified"),
-    secondaryTargets: z.array(canvasSectionSchema).describe("Sections that might be affected indirectly"),
-    confidence: z.number().min(0).max(1).describe("Confidence in section detection"),
-    reasoning: z.string().describe("Explanation of why these sections were selected"),
-    keywords: z.array(z.string()).describe("Key terms that influenced section selection"),
-    detectionMethod: z.enum(['keyword', 'ai_analysis', 'hybrid']).describe("Method used for detection")
+    primaryTargets: z.array(canvasSectionSchema).describe("Main sections that should be modified based on user intent"),
+    secondaryTargets: z.array(canvasSectionSchema).describe("Sections that might be affected indirectly or as dependencies"),
+    confidence: z.number().min(0).max(1).describe("AI confidence in section detection accuracy"),
+    reasoning: z.string().describe("Clear explanation of why these specific sections were selected"),
+    detectedLanguage: z.string().describe("Language detected in user message"),
+    contextualHints: z.array(z.string()).describe("Key phrases or context clues that influenced section selection"),
+    dependencyAnalysis: z.string().describe("Analysis of how sections might affect each other"),
+    urgencyLevel: z.enum(['low', 'medium', 'high']).describe("Perceived urgency for modifying these sections")
   })
 })
 
@@ -36,285 +34,191 @@ const sectionTargetDetectionTool = tool({
  * SectionTargetDetector class for identifying target canvas sections
  */
 export class SectionTargetDetector {
-  private readonly model = openai('gpt-4o-mini')
+  // No need for model instance - using failover system
 
   /**
-   * Detect target sections from user message and canvas context
+   * Detect target sections using pure AI analysis - no hardcoded keywords
    */
   async detectTargetSections(
     userMessage: string,
     currentCanvas?: QACanvasDocument
   ): Promise<SectionTargetResult> {
     try {
-      // Perform keyword-based detection first
-      const keywordResult = this.performKeywordDetection(userMessage)
+      console.log('🎯 Starting AI-powered section target detection...')
       
-      // If keyword detection has high confidence, use it
-      if (keywordResult.confidence >= CONFIDENCE_THRESHOLDS.HIGH_CONFIDENCE) {
-        return keywordResult
-      }
+      // Use pure AI analysis for section detection
+      const aiResult = await this.performPureAIDetection(userMessage, currentCanvas)
       
-      // Otherwise, use AI analysis for more nuanced detection
-      const aiResult = await this.performAIDetection(userMessage, currentCanvas, keywordResult)
+      // Validate sections against current canvas state
+      const validatedResult = this.validateSections(aiResult, currentCanvas)
       
-      // Combine results for best accuracy
-      return this.combineDetectionResults(keywordResult, aiResult)
+      console.log(`✅ Detected sections: ${validatedResult.primaryTargets.join(', ')} (confidence: ${validatedResult.confidence})`)
+      return validatedResult
       
     } catch (error) {
-      console.error('Section target detection failed:', error)
+      console.error('❌ Section target detection failed:', error)
       return this.createFallbackResult(userMessage, error as Error)
     }
   }
 
   /**
-   * Perform keyword-based section detection
+   * Perform pure AI-based section detection without hardcoded keywords
    */
-  private performKeywordDetection(userMessage: string): SectionTargetResult {
-    const messageLower = userMessage.toLowerCase()
-    const detectedKeywords: string[] = []
-    const sectionScores: Record<CanvasSection, number> = {
-      ticketSummary: 0,
-      acceptanceCriteria: 0,
-      testCases: 0,
-      configurationWarnings: 0,
-      metadata: 0
-    }
-
-    // Score each section based on keyword matches
-    for (const [section, keywords] of Object.entries(SECTION_KEYWORDS)) {
-      const sectionKey = section as CanvasSection
-      let sectionScore = 0
-      
-      for (const keyword of keywords) {
-        if (messageLower.includes(keyword.toLowerCase())) {
-          // Weight longer keywords more heavily
-          const weight = keyword.length > 10 ? 2 : 1
-          sectionScore += weight
-          detectedKeywords.push(keyword)
-        }
-      }
-      
-      sectionScores[sectionKey] = sectionScore
-    }
-
-    // Determine primary and secondary targets
-    const sortedSections = Object.entries(sectionScores)
-      .sort(([, a], [, b]) => b - a)
-      .filter(([, score]) => score > 0)
-
-    const primaryTargets: CanvasSection[] = []
-    const secondaryTargets: CanvasSection[] = []
-
-    // Primary targets: sections with highest scores
-    const maxScore = sortedSections[0]?.[1] || 0
-    const highThreshold = maxScore * 0.8
-
-    for (const [section, score] of sortedSections) {
-      if (score >= highThreshold && primaryTargets.length < 3) {
-        primaryTargets.push(section as CanvasSection)
-      } else if (score > 0 && secondaryTargets.length < 2) {
-        secondaryTargets.push(section as CanvasSection)
-      }
-    }
-
-    // Calculate confidence based on keyword matches
-    const totalMatches = Object.values(sectionScores).reduce((sum, score) => sum + score, 0)
-    const confidence = Math.min(0.95, Math.max(0.1, totalMatches * 0.2))
-
-    return {
-      primaryTargets,
-      secondaryTargets,
-      keywords: [...new Set(detectedKeywords)],
-      confidence,
-      detectionMethod: 'keyword'
-    }
-  }
-
-  /**
-   * Perform AI-based section detection
-   */
-  private async performAIDetection(
+  private async performPureAIDetection(
     userMessage: string,
-    currentCanvas?: QACanvasDocument,
-    keywordHints?: SectionTargetResult
+    currentCanvas?: QACanvasDocument
   ): Promise<SectionTargetResult> {
-    
-    const systemPrompt = this.buildSystemPrompt(currentCanvas, keywordHints)
+    const systemPrompt = this.buildAISystemPrompt(currentCanvas)
     
     try {
-      const result = await generateText({
-        model: this.model,
-        system: systemPrompt,
-        prompt: `
-Analiza el siguiente mensaje del usuario e identifica qué secciones del lienzo QA necesitan ser modificadas:
+      console.log('🧠 Sending message to AI for section target detection...')
+      
+      const result = await generateTextWithFailover(
+        `
+Analyze this user message and identify which canvas sections need modification:
 
-Mensaje del usuario: "${userMessage}"
+USER MESSAGE: "${userMessage}"
 
 ${currentCanvas ? `
-Estado actual del lienzo:
-- Resumen del ticket: ${currentCanvas.ticketSummary.problem ? 'Presente' : 'Ausente'}
-- Criterios de aceptación: ${currentCanvas.acceptanceCriteria.length} items
-- Casos de prueba: ${currentCanvas.testCases.length} items
-- Advertencias de configuración: ${currentCanvas.configurationWarnings.length} items
-` : 'No hay lienzo disponible actualmente.'}
+CURRENT CANVAS STATE:
+- Ticket Summary: ${currentCanvas.ticketSummary.problem ? 'Present' : 'Missing'}
+- Acceptance Criteria: ${currentCanvas.acceptanceCriteria.length} items
+- Test Cases: ${currentCanvas.testCases.length} items
+- Configuration Warnings: ${currentCanvas.configurationWarnings.length} items
+- Ticket ID: ${currentCanvas.metadata.ticketId}
+` : 'No canvas currently available.'}
 
-Pistas del análisis de palabras clave:
-- Objetivos primarios sugeridos: ${keywordHints?.primaryTargets.join(', ') || 'Ninguno'}
-- Objetivos secundarios sugeridos: ${keywordHints?.secondaryTargets.join(', ') || 'Ninguno'}
-- Palabras clave detectadas: ${keywordHints?.keywords.join(', ') || 'Ninguna'}
-- Confianza de palabras clave: ${keywordHints?.confidence || 0}
-
-Identifica las secciones objetivo con alta precisión.
+Identify the target sections with high precision and explain your reasoning.
         `,
-        tools: { sectionTargetDetection: sectionTargetDetectionTool },
-        toolChoice: 'required',
-        maxTokens: 800,
-        temperature: 0.1
-      })
+        {
+          system: systemPrompt,
+          tools: { sectionTargetDetection: sectionTargetDetectionTool },
+          toolChoice: 'required',
+          maxTokens: 1000,
+          temperature: 0.1 // Low temperature for consistent detection
+        }
+      )
 
-      const toolCall = result.toolCalls[0]
+      // Handle both string and object responses from failover system
+      if (typeof result === 'string') {
+        throw new Error('Section detection received text response instead of tool calls')
+      }
+
+      const toolCall = result.toolCalls?.[0]
       if (toolCall?.toolName === 'sectionTargetDetection') {
         const args = toolCall.args
+        console.log(`🎯 AI detected sections: ${args.primaryTargets.join(', ')} (${args.confidence})`)
+        
         return {
           primaryTargets: args.primaryTargets,
           secondaryTargets: args.secondaryTargets,
-          keywords: args.keywords,
+          keywords: args.contextualHints || [], // Use AI-detected hints instead of hardcoded keywords
           confidence: args.confidence,
           detectionMethod: 'ai_analysis'
         }
       }
       
-      throw new Error('AI detection did not return expected tool call')
+      throw new Error('AI did not return expected section detection')
       
     } catch (error) {
-      console.error('AI section detection failed:', error)
-      // Return keyword result as fallback
-      return keywordHints || this.createEmptyResult()
+      console.error('❌ AI section detection failed:', error)
+      throw error
     }
   }
 
+
+
   /**
-   * Build system prompt for AI detection
+   * Build AI system prompt for pure section detection
    */
-  private buildSystemPrompt(
-    currentCanvas?: QACanvasDocument,
-    keywordHints?: SectionTargetResult
-  ): string {
+  private buildAISystemPrompt(currentCanvas?: QACanvasDocument): string {
     return `
-Eres un experto en análisis de documentación QA que identifica qué secciones de un lienzo necesitan modificación.
+You are an expert QA documentation analyst that identifies which canvas sections need modification based on user intent.
 
-Las secciones disponibles son:
+AVAILABLE CANVAS SECTIONS:
 
-1. **ticketSummary**: Resumen del ticket (problema, solución, contexto)
-   - Indicadores: "resumen", "explicación", "descripción", "contexto", "problema", "solución"
+1. **ticketSummary**: Ticket summary (problem, solution, context)
+   - When users want to modify the overall description, problem statement, or solution approach
+   - Examples: "change the problem description", "update the context", "fix the summary"
 
-2. **acceptanceCriteria**: Criterios de aceptación
-   - Indicadores: "criterios de aceptación", "criterios", "requisitos", "condiciones"
+2. **acceptanceCriteria**: Acceptance criteria and requirements
+   - When users want to modify, add, or remove acceptance criteria
+   - Examples: "add new criteria", "fix the requirements", "criteria are wrong", "missing conditions"
+   - MOST COMMON section for modifications
 
-3. **testCases**: Casos de prueba
-   - Indicadores: "test cases", "casos de prueba", "pruebas", "tests", "escenarios"
+3. **testCases**: Test cases and scenarios
+   - When users want to modify, add, or remove test cases
+   - Examples: "add test cases", "fix the tests", "test scenarios are wrong", "missing edge cases"
 
-4. **configurationWarnings**: Advertencias de configuración
-   - Indicadores: "configuración", "advertencias", "warnings", "conflictos"
+4. **configurationWarnings**: Configuration warnings and alerts
+   - When users want to address configuration issues or warnings
+   - Examples: "fix the warnings", "configuration problems", "resolve alerts"
 
-5. **metadata**: Metadatos del documento
-   - Indicadores: "metadata", "metadatos", "información", "detalles"
+5. **metadata**: Document metadata and settings
+   - RARELY modified by users - usually system-managed
+   - Only when explicitly mentioned: "change the metadata", "update document info"
 
-REGLAS IMPORTANTES:
+CRITICAL ANALYSIS RULES:
 
-1. **Objetivos Primarios**: Secciones que el usuario menciona explícitamente o que son el foco principal
-2. **Objetivos Secundarios**: Secciones que podrían verse afectadas indirectamente
+1. **Primary Targets**: Sections the user explicitly mentions or clearly intends to modify
+2. **Secondary Targets**: Sections that might be affected as dependencies or side effects
 
-3. **Dependencias importantes**:
-   - Si se modifican criterios de aceptación → los test cases podrían necesitar actualización
-   - Si se modifica el resumen del ticket → criterios y test cases podrían verse afectados
+3. **Section Dependencies**:
+   - acceptanceCriteria changes → testCases might need updates
+   - ticketSummary changes → acceptanceCriteria and testCases might need updates
+   - testCases changes → rarely affects other sections
 
-4. **Confianza**:
-   - Alta (0.8+): Mención explícita de secciones específicas
-   - Media (0.5-0.8): Implicación clara pero no explícita
-   - Baja (0.2-0.5): Inferencia basada en contexto
-   - Muy baja (<0.2): Adivinanza
+4. **Confidence Levels**:
+   - High (0.8+): Explicit mention or clear intent for specific sections
+   - Medium (0.5-0.8): Clear implication but not explicit
+   - Low (0.2-0.5): Inference based on context
+   - Very Low (<0.2): Pure guesswork
 
-5. **Límites**:
-   - Máximo 3 objetivos primarios
-   - Máximo 2 objetivos secundarios
-   - Prioriza calidad sobre cantidad
+5. **Default Assumptions**:
+   - When users complain something is "wrong" without specifying → assume acceptanceCriteria
+   - When users want "improvements" without specifying → assume acceptanceCriteria
+   - When users mention "tests" or "testing" → testCases
+   - When users mention "problem" or "solution" → ticketSummary
 
-Contexto del lienzo actual:
+6. **Language Agnostic**:
+   - Work with ANY language: Spanish, English, mixed, or others
+   - Focus on intent rather than specific keywords
+   - Understand context and meaning regardless of language
+
+7. **Limits**:
+   - Maximum 3 primary targets (prioritize quality over quantity)
+   - Maximum 2 secondary targets
+   - Be decisive - avoid empty results
+
+CURRENT CANVAS CONTEXT:
 ${currentCanvas ? `
-- Tiene resumen: ${currentCanvas.ticketSummary.problem ? 'Sí' : 'No'}
-- Criterios de aceptación: ${currentCanvas.acceptanceCriteria.length}
-- Casos de prueba: ${currentCanvas.testCases.length}
-- Advertencias: ${currentCanvas.configurationWarnings.length}
-` : 'No hay lienzo disponible'}
+- Has Summary: ${currentCanvas.ticketSummary.problem ? 'Yes' : 'No'}
+- Acceptance Criteria: ${currentCanvas.acceptanceCriteria.length} items
+- Test Cases: ${currentCanvas.testCases.length} items
+- Configuration Warnings: ${currentCanvas.configurationWarnings.length} items
+- Ticket ID: ${currentCanvas.metadata.ticketId}
+` : 'No canvas available - user might be starting fresh'}
+
+Be confident, decisive, and language-agnostic in your section detection.
     `
   }
 
-  /**
-   * Combine keyword and AI detection results
-   */
-  private combineDetectionResults(
-    keywordResult: SectionTargetResult,
-    aiResult: SectionTargetResult
-  ): SectionTargetResult {
-    // Combine primary targets (AI takes precedence)
-    const primaryTargets = aiResult.primaryTargets.length > 0 
-      ? aiResult.primaryTargets 
-      : keywordResult.primaryTargets
 
-    // Combine secondary targets
-    const allSecondaryTargets = [
-      ...aiResult.secondaryTargets,
-      ...keywordResult.secondaryTargets
-    ]
-    const secondaryTargets = [...new Set(allSecondaryTargets)]
-      .filter(section => !primaryTargets.includes(section))
-      .slice(0, 2) // Limit to 2
-
-    // Combine keywords
-    const keywords = [...new Set([
-      ...aiResult.keywords,
-      ...keywordResult.keywords
-    ])]
-
-    // Use higher confidence
-    const confidence = Math.max(aiResult.confidence, keywordResult.confidence)
-
-    return {
-      primaryTargets,
-      secondaryTargets,
-      keywords,
-      confidence,
-      detectionMethod: 'hybrid'
-    }
-  }
 
   /**
-   * Create fallback result when detection fails
+   * Create fallback result when AI detection fails
    */
   private createFallbackResult(userMessage: string, error: Error): SectionTargetResult {
-    console.warn('Using fallback section detection due to error:', error.message)
+    console.warn('🚨 Using fallback section detection due to AI error:', error.message)
     
-    // Simple fallback: try to detect any section keywords
-    const messageLower = userMessage.toLowerCase()
-    const fallbackTargets: CanvasSection[] = []
-    
-    if (messageLower.includes('criterios') || messageLower.includes('criteria')) {
-      fallbackTargets.push('acceptanceCriteria')
-    }
-    if (messageLower.includes('test') || messageLower.includes('prueba')) {
-      fallbackTargets.push('testCases')
-    }
-    if (messageLower.includes('resumen') || messageLower.includes('summary')) {
-      fallbackTargets.push('ticketSummary')
-    }
-    
+    // Smart fallback: assume acceptanceCriteria (most common modification target)
+    // This is safer than trying to parse keywords when AI fails
     return {
-      primaryTargets: fallbackTargets.slice(0, 1),
-      secondaryTargets: fallbackTargets.slice(1, 2),
-      keywords: [],
-      confidence: CONFIDENCE_THRESHOLDS.LOW_CONFIDENCE,
-      detectionMethod: 'keyword'
+      primaryTargets: ['acceptanceCriteria'], // Most common section for modifications
+      secondaryTargets: [], // Don't guess secondary targets in fallback
+      keywords: [], // No keywords in pure AI approach
+      confidence: 0.4, // Lower confidence since this is fallback
+      detectionMethod: 'ai_analysis' // Still AI-based, just fallback
     }
   }
 

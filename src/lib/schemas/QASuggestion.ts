@@ -75,6 +75,7 @@ export type GenerateSuggestionsRequest = z.infer<typeof generateSuggestionsReque
 /**
  * AI Tool definition for generating QA suggestions
  * This tool will be used with Vercel AI SDK's generateText function
+ * All fields are required to ensure OpenAI compatibility
  */
 export const qaSuggestionTool = tool({
   description: 'Generate a single, actionable QA suggestion to improve the test plan and documentation coverage.',
@@ -82,12 +83,12 @@ export const qaSuggestionTool = tool({
     suggestionType: suggestionTypeSchema.describe('The category of the QA suggestion'),
     title: z.string().describe('Brief, actionable title for the suggestion'),
     description: z.string().describe('Detailed explanation of what should be done and why'),
-    targetSection: z.string().optional().describe('Specific document section this applies to'),
-    priority: suggestionPrioritySchema.default('medium').describe('How important this suggestion is'),
+    targetSection: z.string().describe('Specific document section this applies to (e.g., "Test Cases", "Acceptance Criteria", "General")'),
+    priority: suggestionPrioritySchema.describe('How important this suggestion is'),
     reasoning: z.string().describe('Why this suggestion is valuable for QA coverage'),
-    implementationHint: z.string().optional().describe('Hint on how to implement or address this suggestion'),
-    estimatedEffort: z.enum(['low', 'medium', 'high']).optional().describe('Estimated effort to implement this suggestion'),
-    tags: z.array(z.string()).default([]).describe('Tags for categorization and filtering')
+    implementationHint: z.string().describe('Hint on how to implement or address this suggestion (use "No specific implementation hint" if none)'),
+    estimatedEffort: z.enum(['low', 'medium', 'high']).describe('Estimated effort to implement this suggestion'),
+    tags: z.array(z.string()).describe('Tags for categorization and filtering (use empty array if none)')
   }),
   // No execute function needed - we just want the AI to generate the parameters
 })
