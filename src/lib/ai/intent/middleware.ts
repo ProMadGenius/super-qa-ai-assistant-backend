@@ -4,11 +4,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 import {
   IntentAnalyzer,
-  SectionTargetDetector,
   DependencyAnalyzer,
   ClarificationGenerator,
   ContextualResponseGenerator,
@@ -19,13 +17,10 @@ import {
   type CanvasSection,
   type ClarificationResult,
   type ContextualResponse,
-  type ConversationState,
-  REJECTION_TEMPLATES,
-  RESPONSE_LIMITS
+  REJECTION_TEMPLATES
 } from './index'
 import type { QACanvasDocument } from '../../schemas/QACanvasDocument'
 import type { JiraTicket } from '../../schemas/JiraTicket'
-import { handleAIError, handleValidationError } from '../errorHandler'
 
 /**
  * Standard message format for middleware processing
@@ -136,7 +131,6 @@ export class IntentAnalysisMiddlewareError extends Error {
  */
 export class IntentAnalysisMiddleware {
   private intentAnalyzer: IntentAnalyzer
-  private sectionTargetDetector: SectionTargetDetector
   private dependencyAnalyzer: DependencyAnalyzer
   private clarificationGenerator: ClarificationGenerator
   private contextualResponseGenerator: ContextualResponseGenerator
@@ -145,7 +139,6 @@ export class IntentAnalysisMiddleware {
   constructor(config: Partial<MiddlewareConfig> = {}) {
     this.config = { ...DEFAULT_MIDDLEWARE_CONFIG, ...config }
     this.intentAnalyzer = new IntentAnalyzer()
-    this.sectionTargetDetector = new SectionTargetDetector()
     this.dependencyAnalyzer = new DependencyAnalyzer()
     this.clarificationGenerator = new ClarificationGenerator()
     this.contextualResponseGenerator = new ContextualResponseGenerator()
@@ -279,8 +272,16 @@ export class IntentAnalysisMiddleware {
 
     // Race between intent analysis and timeout
     try {
+      // Convert messages to AI SDK format for intent analysis
+      const aiSdkMessages = messages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        createdAt: typeof msg.createdAt === 'string' ? new Date(msg.createdAt) : msg.createdAt
+      })) as any
+      
       return await Promise.race([
-        this.intentAnalyzer.analyzeIntent(userMessage, messages, currentDocument),
+        this.intentAnalyzer.analyzeIntent(userMessage, aiSdkMessages, currentDocument),
         timeoutPromise
       ])
     } catch (error) {
@@ -385,12 +386,12 @@ export class IntentAnalysisMiddleware {
       const clarificationResult = await this.clarificationGenerator.generateClarificationQuestions(
         userMessage,
         intentResult.targetSections,
-        context.currentDocument
+        context.currentDocument as any
       )
 
       // Update conversation state if enabled
       if (this.config.enableConversationState) {
-        await conversationStateManager.updateState(sessionId, {
+        conversationStateManager.updateState(sessionId, {
           currentPhase: 'awaiting_clarification',
           pendingClarifications: clarificationResult.questions,
           lastIntent: intentResult,
@@ -437,8 +438,8 @@ export class IntentAnalysisMiddleware {
     try {
       const contextualResponse = await this.contextualResponseGenerator.generateContextualResponse(
         userMessage,
-        context.currentDocument,
-        context.originalTicketData
+        context.currentDocument as any,
+        context.originalTicketData as any
       )
 
       return {
@@ -513,7 +514,7 @@ export class IntentAnalysisMiddleware {
       try {
         dependencyAnalysis = await this.dependencyAnalyzer.analyzeDependencies(
           intentResult.targetSections,
-          context.currentDocument,
+          context.currentDocument as any,
           userMessage
         )
       } catch (error) {

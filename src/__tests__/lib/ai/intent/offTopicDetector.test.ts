@@ -29,19 +29,87 @@ describe('OffTopicDetector', () => {
     })
     
     mockCanvas = {
-      ticketSummary: 'Test ticket summary',
-      acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
-      testCases: ['Test case 1', 'Test case 2'],
+      ticketSummary: {
+        problem: 'Test problem',
+        solution: 'Test solution',
+        context: 'Test context'
+      },
+      acceptanceCriteria: [
+        {
+          id: 'ac-1',
+          title: 'Criterion 1',
+          description: 'Test criterion 1',
+          priority: 'must',
+          category: 'functional',
+          testable: true
+        },
+        {
+          id: 'ac-2',
+          title: 'Criterion 2',
+          description: 'Test criterion 2',
+          priority: 'should',
+          category: 'ui',
+          testable: true
+        }
+      ],
+      testCases: [
+        {
+          format: 'gherkin',
+          id: 'tc-1',
+          category: 'functional',
+          priority: 'high',
+          testCase: {
+            scenario: 'Test case 1',
+            given: ['Given condition'],
+            when: ['When action'],
+            then: ['Then result'],
+            tags: ['@test']
+          }
+        },
+        {
+          format: 'gherkin',
+          id: 'tc-2',
+          category: 'ui',
+          priority: 'medium',
+          testCase: {
+            scenario: 'Test case 2',
+            given: ['Given condition'],
+            when: ['When action'],
+            then: ['Then result'],
+            tags: ['@test']
+          }
+        }
+      ],
       configurationWarnings: [],
       metadata: {
         ticketId: 'TEST-123',
-        createdAt: new Date().toISOString(),
-        lastModified: new Date().toISOString()
+        qaProfile: {
+          testCaseFormat: 'gherkin',
+          qaCategories: {
+            functional: true,
+            ui: true,
+            ux: false,
+            negative: false,
+            api: false,
+            database: false,
+            performance: false,
+            security: false,
+            mobile: false,
+            accessibility: false
+          },
+          autoRefresh: true,
+          includeComments: true,
+          includeImages: true,
+          operationMode: 'offline',
+          showNotifications: true
+        },
+        generatedAt: new Date().toISOString(),
+        documentVersion: '1.0'
       }
     }
 
     mockTicket = {
-      key: 'TEST-123',
+      issueKey: 'TEST-123',
       summary: 'Test ticket for QA analysis',
       description: 'This is a test ticket for quality assurance testing',
       issueType: 'Story',
@@ -49,8 +117,11 @@ describe('OffTopicDetector', () => {
       priority: 'Medium',
       assignee: 'test-user',
       reporter: 'test-reporter',
-      created: new Date().toISOString(),
-      updated: new Date().toISOString()
+      comments: [],
+      attachments: [],
+      components: [],
+      customFields: {},
+      scrapedAt: new Date().toISOString()
     }
   })
 

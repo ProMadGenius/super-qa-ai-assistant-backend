@@ -92,10 +92,24 @@ describe('IntentAnalysisMiddleware', () => {
           testCaseFormat: 'gherkin',
           qaCategories: {
             functional: true,
-            ui: false
-          }
+            ui: false,
+            ux: false,
+            negative: false,
+            api: false,
+            database: false,
+            performance: false,
+            security: false,
+            mobile: false,
+            accessibility: false
+          },
+          autoRefresh: true,
+          includeComments: true,
+          includeImages: true,
+          operationMode: 'offline',
+          showNotifications: true
         },
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        documentVersion: '1.0'
       }
     } as QACanvasDocument
 
@@ -759,7 +773,7 @@ describe('ResponseFormatter', () => {
     it('should handle unknown response type', async () => {
       const middlewareResponse = {
         type: 'unknown' as any,
-        intent: 'modify_canvas',
+        intent: 'modify_canvas' as const,
         confidence: 0,
         targetSections: [],
         sessionId: 'test-session',
@@ -793,6 +807,79 @@ describe('Default Middleware Instance', () => {
 })
 
 describe('Integration Scenarios', () => {
+  let middleware: IntentAnalysisMiddleware
+  let mockContext: RequestContext
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    middleware = new IntentAnalysisMiddleware()
+    
+    mockContext = {
+      messages: [
+        {
+          id: '1',
+          role: 'user',
+          content: 'Los criterios de aceptación están mal definidos',
+          createdAt: new Date().toISOString()
+        }
+      ],
+      currentDocument: {
+        ticketSummary: {
+          problem: 'Test problem',
+          solution: 'Test solution',
+          context: 'Test context'
+        },
+        acceptanceCriteria: [],
+        testCases: [],
+        configurationWarnings: [],
+        metadata: {
+          ticketId: 'TEST-123',
+          qaProfile: {
+            testCaseFormat: 'gherkin',
+            qaCategories: {
+              functional: true,
+              ui: false,
+              ux: false,
+              negative: false,
+              api: false,
+              database: false,
+              performance: false,
+              security: false,
+              mobile: false,
+              accessibility: false
+            },
+            autoRefresh: true,
+            includeComments: true,
+            includeImages: true,
+            operationMode: 'offline',
+            showNotifications: true
+          },
+          generatedAt: new Date().toISOString(),
+          documentVersion: '1.0'
+        }
+      } as QACanvasDocument,
+      originalTicketData: {
+        issueKey: 'TEST-123',
+        summary: 'Test ticket',
+        description: 'Test description',
+        status: 'In Progress',
+        priority: 'High',
+        issueType: 'Bug',
+        reporter: 'test@example.com',
+        comments: [],
+        attachments: [],
+        components: [],
+        customFields: {},
+        scrapedAt: new Date().toISOString()
+      } as JiraTicket,
+      sessionId: 'test-session',
+      userPreferences: {
+        testCaseFormat: 'gherkin',
+        focusAreas: ['functional']
+      }
+    }
+  })
+
   it('should handle complete request processing pipeline', async () => {
     const mockIntentResult = {
       intent: 'modify_canvas' as const,

@@ -454,7 +454,12 @@ function createMockCanvas(): QACanvasDocument {
           mobile: false,
           accessibility: false
         },
-        testCaseFormat: 'gherkin'
+        testCaseFormat: 'gherkin',
+        autoRefresh: true,
+        includeComments: true,
+        includeImages: true,
+        operationMode: 'offline',
+        showNotifications: true
       },
       ticketId: 'TEST-123',
       documentVersion: '1.0'

@@ -138,9 +138,16 @@ export async function POST(request: NextRequest) {
         const sectionTargetDetector = new SectionTargetDetector()
 
         // Analyze user intent for targeted suggestions
+        const uiMessages = (conversationHistory || []).map((msg, index) => ({
+          id: `msg-${index}`,
+          role: msg.role,
+          content: msg.content,
+          createdAt: msg.timestamp ? new Date(msg.timestamp) : new Date()
+        })) as any
+        
         intentAnalysisResult = await intentAnalyzer.analyzeIntent(
           userContext,
-          conversationHistory || [],
+          uiMessages,
           currentDocument as any
         )
 

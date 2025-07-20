@@ -675,7 +675,17 @@ Cambios propuestos: "${proposedChanges}"
 
 Estado actual del lienzo:
 - Criterios de aceptación: ${currentCanvas.acceptanceCriteria.map((ac, i) => `${i+1}. ${ac.description}`).join('\n  ')}
-- Casos de prueba: ${currentCanvas.testCases.map((tc, i) => `${i+1}. ${tc.description}`).join('\n  ')}
+- Casos de prueba: ${currentCanvas.testCases.map((tc, i) => {
+          let description = `Test Case ${tc.id}`
+          if (tc.format === 'gherkin' && 'scenario' in tc.testCase) {
+            description = tc.testCase.scenario
+          } else if (tc.format === 'steps' && 'title' in tc.testCase) {
+            description = tc.testCase.title
+          } else if (tc.format === 'table' && 'title' in tc.testCase) {
+            description = tc.testCase.title
+          }
+          return `${i+1}. ${description}`
+        }).join('\n  ')}
 - Resumen del ticket: ${currentCanvas.ticketSummary.problem || 'No definido'}
 
 Identifica conflictos potenciales, inconsistencias y problemas de validación que podrían surgir con estos cambios.

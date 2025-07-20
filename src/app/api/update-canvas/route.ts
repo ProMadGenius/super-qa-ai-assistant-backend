@@ -16,18 +16,12 @@ import {
 import { v4 as uuidv4 } from 'uuid'
 import {
   IntentAnalyzer,
-  SectionTargetDetector,
   DependencyAnalyzer,
   ClarificationGenerator,
   ContextualResponseGenerator,
   conversationStateManager,
   generateSessionId,
-  type IntentAnalysisResult,
-  type IntentType,
-  type CanvasSection,
-  type ClarificationResult,
-  type ContextualResponse,
-  type ConversationState
+  type IntentAnalysisResult
 } from '../../../lib/ai/intent'
 
 /**
@@ -140,10 +134,18 @@ export async function POST(request: NextRequest) {
     const sessionId = generateSessionId()
     
     try {
+      // Convert messages to AI SDK format for intent analysis
+      const aiSdkMessages = sanitizedMessages.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        createdAt: typeof msg.createdAt === 'string' ? new Date(msg.createdAt) : msg.createdAt
+      })) as any
+      
       // Perform intent analysis
       const intentResult = await intentAnalyzer.analyzeIntent(
         latestUserMessage.content,
-        sanitizedMessages,
+        aiSdkMessages,
         currentDocument as any
       )
 

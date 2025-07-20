@@ -188,13 +188,15 @@ describe('IntentAnalyzer', () => {
         {
           id: '1',
           role: 'user',
-          content: 'Los criterios están mal'
-        },
+          content: 'Los criterios están mal',
+          createdAt: new Date()
+        } as any,
         {
           id: '2',
           role: 'assistant',
-          content: '¿Qué específicamente necesita cambiar?'
-        }
+          content: '¿Qué específicamente necesita cambiar?',
+          createdAt: new Date()
+        } as any
       ]
 
       mockGenerateText.mockResolvedValue({
@@ -384,7 +386,12 @@ function createMockCanvas(): QACanvasDocument {
           mobile: false,
           accessibility: false
         },
-        testCaseFormat: 'gherkin'
+        testCaseFormat: 'gherkin',
+        autoRefresh: true,
+        includeComments: true,
+        includeImages: true,
+        operationMode: 'offline',
+        showNotifications: true
       },
       ticketId: 'TEST-123',
       documentVersion: '1.0'

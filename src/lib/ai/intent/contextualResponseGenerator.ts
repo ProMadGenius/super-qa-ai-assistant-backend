@@ -92,9 +92,17 @@ ${currentCanvas.acceptanceCriteria.map((ac, i) =>
 ).join('\n')}
 
 Casos de prueba (${currentCanvas.testCases.length} items):
-${currentCanvas.testCases.map((tc, i) => 
-  `${i + 1}. ${tc.testCase.scenario || tc.testCase.title || `Test Case ${tc.id}`} (${tc.format})`
-).join('\n')}
+${currentCanvas.testCases.map((tc, i) => {
+  let title = `Test Case ${tc.id}`
+  if (tc.format === 'gherkin' && 'scenario' in tc.testCase) {
+    title = tc.testCase.scenario
+  } else if (tc.format === 'steps' && 'title' in tc.testCase) {
+    title = tc.testCase.title
+  } else if (tc.format === 'table' && 'title' in tc.testCase) {
+    title = tc.testCase.title
+  }
+  return `${i + 1}. ${title} (${tc.format})`
+}).join('\n')}
 
 ${currentCanvas.configurationWarnings.length > 0 ? `
 Advertencias de configuración:
@@ -258,7 +266,14 @@ EJEMPLOS DE BUENAS RESPUESTAS:
       
       if (currentCanvas.testCases.length > 0) {
         const firstTestCase = currentCanvas.testCases[0]
-        const scenario = firstTestCase.testCase.scenario || firstTestCase.testCase.title || `Test Case ${firstTestCase.id}`
+        let scenario = `Test Case ${firstTestCase.id}`
+        if (firstTestCase.format === 'gherkin' && 'scenario' in firstTestCase.testCase) {
+          scenario = firstTestCase.testCase.scenario
+        } else if (firstTestCase.format === 'steps' && 'title' in firstTestCase.testCase) {
+          scenario = firstTestCase.testCase.title
+        } else if (firstTestCase.format === 'table' && 'title' in firstTestCase.testCase) {
+          scenario = firstTestCase.testCase.title
+        }
         citations.push({
           section: 'testCases',
           content: scenario,
@@ -317,7 +332,14 @@ EJEMPLOS DE BUENAS RESPUESTAS:
           )
         case 'testCases':
           return currentCanvas.testCases.some(tc => {
-            const scenario = tc.testCase.scenario || tc.testCase.title || ''
+            let scenario = ''
+            if (tc.format === 'gherkin' && 'scenario' in tc.testCase) {
+              scenario = tc.testCase.scenario
+            } else if (tc.format === 'steps' && 'title' in tc.testCase) {
+              scenario = tc.testCase.title
+            } else if (tc.format === 'table' && 'title' in tc.testCase) {
+              scenario = tc.testCase.title
+            }
             return scenario.includes(citation.content) || citation.content.includes(scenario)
           })
         case 'ticketSummary':

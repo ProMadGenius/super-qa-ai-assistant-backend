@@ -51,11 +51,24 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
         testCaseFormat: 'gherkin',
         qaCategories: {
           functional: true,
+          ui: true,
+          ux: true,
+          performance: false,
           security: true,
-          performance: false
-        }
+          accessibility: true,
+          api: false,
+          database: false,
+          negative: true,
+          mobile: true
+        },
+        autoRefresh: true,
+        includeComments: true,
+        includeImages: true,
+        operationMode: 'offline',
+        showNotifications: true
       },
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      documentVersion: '1.0'
     }
   }
 
@@ -113,8 +126,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
       }) as any)
 
       vi.mocked(generateTextWithFailover).mockResolvedValue({
+        text: '',
         toolCalls: [
           {
+            type: 'tool-call',
+            toolCallId: 'call-1',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'edge_case',
@@ -128,8 +144,10 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
               tags: ['network', 'timeout', 'edge-case']
             }
           }
-        ]
-      })
+        ],
+        finishReason: 'tool-calls',
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,
@@ -171,8 +189,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
       const { generateTextWithFailover } = await import('@/lib/ai/providerFailover')
 
       vi.mocked(generateTextWithFailover).mockResolvedValue({
+        text: '',
         toolCalls: [
           {
+            type: 'tool-call',
+            toolCallId: 'call-2',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'coverage_gap',
@@ -186,8 +207,10 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
               tags: ['negative-test', 'security']
             }
           }
-        ]
-      })
+        ],
+        finishReason: 'tool-calls',
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,
@@ -214,8 +237,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
       }) as any)
 
       vi.mocked(generateTextWithFailover).mockResolvedValue({
+        text: '',
         toolCalls: [
           {
+            type: 'tool-call',
+            toolCallId: 'call-3',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'improvement',
@@ -229,8 +255,10 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
               tags: ['ux', 'error-handling']
             }
           }
-        ]
-      })
+        ],
+        finishReason: 'tool-calls',
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,
@@ -251,8 +279,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
       const { generateTextWithFailover } = await import('@/lib/ai/providerFailover')
 
       vi.mocked(generateTextWithFailover).mockResolvedValue({
+        text: '',
         toolCalls: [
           {
+            type: 'tool-call',
+            toolCallId: 'call-4',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'security',
@@ -266,8 +297,10 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
               tags: ['security', 'sql-injection']
             }
           }
-        ]
-      })
+        ],
+        finishReason: 'tool-calls',
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+      } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,
@@ -290,8 +323,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
       // Mock multiple responses to test filtering
       vi.mocked(generateTextWithFailover)
         .mockResolvedValueOnce({
+          text: '',
           toolCalls: [
             {
+              type: 'tool-call',
+              toolCallId: 'call-5',
               toolName: 'qaSuggestionTool',
               args: {
                 suggestionType: 'performance', // This should be excluded
@@ -305,11 +341,16 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
                 tags: ['performance']
               }
             }
-          ]
-        })
+          ],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          finishReason: 'tool-calls'
+        } as any)
         .mockResolvedValueOnce({
+          text: '',
           toolCalls: [
             {
+              type: 'tool-call',
+              toolCallId: 'call-6',
               toolName: 'qaSuggestionTool',
               args: {
                 suggestionType: 'functional',
@@ -323,8 +364,10 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
                 tags: ['functional']
               }
             }
-          ]
-        })
+          ],
+          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          finishReason: 'tool-calls'
+        } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,
@@ -398,8 +441,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
 
       // Mock empty or invalid responses
       vi.mocked(generateTextWithFailover).mockResolvedValue({
-        toolCalls: [] // No tool calls
-      })
+        text: '',
+        toolCalls: [], // No tool calls
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        finishReason: 'stop'
+      } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,
@@ -422,8 +468,11 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
       const { generateTextWithFailover } = await import('@/lib/ai/providerFailover')
 
       vi.mocked(generateTextWithFailover).mockResolvedValue({
+        text: '',
         toolCalls: [
           {
+            type: 'tool-call',
+            toolCallId: 'call-7',
             toolName: 'qaSuggestionTool',
             args: {
               suggestionType: 'edge_case',
@@ -437,8 +486,10 @@ describe('/api/generate-suggestions with Intent Analysis', () => {
               tags: ['concurrency', 'edge-case', 'race-condition']
             }
           }
-        ]
-      })
+        ],
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        finishReason: 'tool-calls'
+      } as any)
 
       const request = createRequest({
         currentDocument: mockCanvas,

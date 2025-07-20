@@ -7,24 +7,22 @@ import { generateText, tool } from 'ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
 import type { UIMessage } from 'ai'
-import type { 
-  IntentAnalysisResult, 
-  IntentType, 
-  CanvasSection, 
+import type {
+  IntentAnalysisResult,
+  IntentType,
+  CanvasSection,
   AnalysisContext,
   IntentAnalysisError
 } from './types'
 import type { QACanvasDocument } from '../../schemas/QACanvasDocument'
-import { 
-  INTENT_KEYWORDS, 
-  SECTION_KEYWORDS, 
-  CONFIDENCE_THRESHOLDS,
-  RESPONSE_LIMITS 
+import {
+  INTENT_KEYWORDS,
+  SECTION_KEYWORDS
 } from './constants'
-import { 
-  intentTypeSchema, 
-  canvasSectionSchema, 
-  intentAnalysisResultSchema 
+import {
+  intentTypeSchema,
+  canvasSectionSchema,
+  intentAnalysisResultSchema
 } from './types'
 
 /**
@@ -60,30 +58,30 @@ export class IntentAnalyzer {
     try {
       // Build analysis context
       const context = this.buildAnalysisContext(conversationHistory, currentCanvas)
-      
+
       // Perform keyword-based pre-analysis
       const keywordAnalysis = this.performKeywordAnalysis(userMessage)
-      
+
       // Use AI for detailed intent classification
       const aiAnalysis = await this.performAIAnalysis(
-        userMessage, 
-        conversationHistory, 
-        currentCanvas, 
+        userMessage,
+        conversationHistory,
+        currentCanvas,
         context,
         keywordAnalysis
       )
-      
+
       // Combine keyword and AI analysis
       const finalResult = this.combineAnalysisResults(keywordAnalysis, aiAnalysis, context)
-      
+
       // Validate result
       const validationResult = intentAnalysisResultSchema.safeParse(finalResult)
       if (!validationResult.success) {
         throw new Error(`Intent analysis result validation failed: ${validationResult.error.message}`)
       }
-      
+
       return finalResult
-      
+
     } catch (error) {
       console.error('Intent analysis failed:', error)
       return this.createFallbackResult(userMessage, error as Error)
@@ -99,27 +97,27 @@ export class IntentAnalyzer {
   ): AnalysisContext {
     const hasCanvas = !!currentCanvas
     const conversationLength = conversationHistory.length
-    
+
     // Determine canvas complexity
     let canvasComplexity: 'simple' | 'medium' | 'complex' = 'simple'
     if (currentCanvas) {
-      const totalItems = 
-        currentCanvas.acceptanceCriteria.length + 
+      const totalItems =
+        currentCanvas.acceptanceCriteria.length +
         currentCanvas.testCases.length +
         currentCanvas.configurationWarnings.length
-      
+
       if (totalItems > 15) canvasComplexity = 'complex'
       else if (totalItems > 5) canvasComplexity = 'medium'
     }
-    
+
     // Get available sections
-    const availableSections: CanvasSection[] = hasCanvas 
+    const availableSections: CanvasSection[] = hasCanvas
       ? ['ticketSummary', 'acceptanceCriteria', 'testCases', 'configurationWarnings', 'metadata']
       : []
-    
+
     // Get last user intent from conversation
     const lastUserIntent = this.extractLastUserIntent(conversationHistory)
-    
+
     return {
       hasCanvas,
       canvasComplexity,
@@ -136,11 +134,11 @@ export class IntentAnalyzer {
     const messageLower = userMessage.toLowerCase()
     const detectedKeywords: string[] = []
     const targetSections: CanvasSection[] = []
-    
+
     // Check for intent keywords
     let likelyIntent: IntentType | null = null
     let maxKeywordMatches = 0
-    
+
     for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
       const matches = keywords.filter(keyword => messageLower.includes(keyword.toLowerCase()))
       if (matches.length > maxKeywordMatches) {
@@ -149,7 +147,7 @@ export class IntentAnalyzer {
         detectedKeywords.push(...matches)
       }
     }
-    
+
     // Check for section keywords
     for (const [section, keywords] of Object.entries(SECTION_KEYWORDS)) {
       const matches = keywords.filter(keyword => messageLower.includes(keyword.toLowerCase()))
@@ -158,13 +156,13 @@ export class IntentAnalyzer {
         detectedKeywords.push(...matches)
       }
     }
-    
+
     // Be more decisive - if we have any section keywords, assume modification intent
     if (targetSections.length > 0 && !likelyIntent) {
       likelyIntent = 'modify_canvas'
       maxKeywordMatches = Math.max(maxKeywordMatches, 1)
     }
-    
+
     // If no specific intent but message seems like a complaint/request, assume modification
     if (!likelyIntent && this.seemsLikeModificationRequest(messageLower)) {
       likelyIntent = 'modify_canvas'
@@ -174,10 +172,10 @@ export class IntentAnalyzer {
         targetSections.push('acceptanceCriteria')
       }
     }
-    
+
     // Determine confidence - be more confident in our decisions
     const confidence = Math.min(0.9, Math.max(0.6, maxKeywordMatches * 0.3 + 0.4))
-    
+
     return {
       intent: likelyIntent || 'modify_canvas', // Default to modification instead of clarification
       confidence,
@@ -200,7 +198,7 @@ export class IntentAnalyzer {
       'wrong', 'incorrect', 'error', 'problem', 'missing', 'needs', 'should', 'better',
       'change', 'update', 'fix', 'improve', 'add', 'remove', 'delete'
     ]
-    
+
     return modificationIndicators.some(indicator => messageLower.includes(indicator))
   }
 
@@ -214,10 +212,10 @@ export class IntentAnalyzer {
     context?: AnalysisContext,
     keywordHints?: Partial<IntentAnalysisResult>
   ): Promise<Partial<IntentAnalysisResult>> {
-    
+
     const systemPrompt = this.buildSystemPrompt(currentCanvas, context, keywordHints)
     const conversationContext = this.buildConversationContext(conversationHistory)
-    
+
     try {
       const result = await generateText({
         model: this.model,
@@ -255,9 +253,9 @@ Clasifica la intención y proporciona un análisis detallado.
       if (toolCall?.toolName === 'intentClassification') {
         return toolCall.args as Partial<IntentAnalysisResult>
       }
-      
+
       throw new Error('AI analysis did not return expected tool call')
-      
+
     } catch (error) {
       console.error('AI analysis failed:', error)
       // Return keyword analysis as fallback
@@ -333,7 +331,7 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
     if (conversationHistory.length === 0) {
       return 'Esta es la primera interacción.'
     }
-    
+
     const recentMessages = conversationHistory.slice(-4) // Last 4 messages
     return recentMessages
       .map((msg, index) => `${msg.role}: ${this.extractTextFromMessage(msg)}`)
@@ -344,17 +342,21 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
    * Extract text content from UI message
    */
   private extractTextFromMessage(message: UIMessage): string {
-    if (typeof message.content === 'string') {
-      return message.content
-    }
+    const content = message.content as any
     
-    if (Array.isArray(message.content)) {
-      return message.content
-        .filter(part => part.type === 'text')
-        .map(part => part.text)
+    if (typeof content === 'string') {
+      return content
+    }
+
+    // Handle array content (for complex message types)
+    if (Array.isArray(content)) {
+      const parts = content as any[]
+      return parts
+        .filter((part: any) => part && part.type === 'text')
+        .map((part: any) => part.text || '')
         .join(' ')
     }
-    
+
     return '[No text content]'
   }
 
@@ -367,19 +369,19 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
     const lastUserMessage = conversationHistory
       .filter(msg => msg.role === 'user')
       .pop()
-    
+
     if (!lastUserMessage) return undefined
-    
+
     // Simple keyword-based detection for last intent
     const messageText = this.extractTextFromMessage(lastUserMessage).toLowerCase()
-    
+
     if (INTENT_KEYWORDS.modify_canvas.some(keyword => messageText.includes(keyword))) {
       return 'modify_canvas'
     }
     if (INTENT_KEYWORDS.provide_information.some(keyword => messageText.includes(keyword))) {
       return 'provide_information'
     }
-    
+
     return undefined
   }
 
@@ -397,21 +399,21 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
       aiAnalysis.confidence || 0,
       keywordAnalysis.confidence || 0
     )
-    
+
     // Combine target sections from both analyses
     const targetSections = [
       ...(aiAnalysis.targetSections || []),
       ...(keywordAnalysis.targetSections || [])
     ]
     const uniqueTargetSections = [...new Set(targetSections)]
-    
+
     // Combine keywords
     const keywords = [
       ...(aiAnalysis.keywords || []),
       ...(keywordAnalysis.keywords || [])
     ]
     const uniqueKeywords = [...new Set(keywords)]
-    
+
     return {
       intent,
       confidence: Math.min(confidence, 1.0),
@@ -429,11 +431,11 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
    */
   private createFallbackResult(userMessage: string, error: Error): IntentAnalysisResult {
     console.warn('Using fallback intent analysis due to error:', error.message)
-    
+
     // Even in fallback, try to be decisive - assume modification intent
     const messageLower = userMessage.toLowerCase()
     const seemsLikeModification = this.seemsLikeModificationRequest(messageLower)
-    
+
     return {
       intent: seemsLikeModification ? 'modify_canvas' : 'modify_canvas', // Always default to modification
       confidence: seemsLikeModification ? 0.6 : 0.5,
@@ -451,25 +453,5 @@ Pistas del análisis de palabras clave: ${keywordHints?.intent || 'modify_canvas
     }
   }
 
-  /**
-   * Create intent analysis error
-   */
-  private createIntentAnalysisError(
-    message: string,
-    code: IntentAnalysisError['code'],
-    userMessage: string,
-    fallbackIntent: IntentType = 'ask_clarification'
-  ): IntentAnalysisError {
-    const error = new Error(message) as IntentAnalysisError
-    error.code = code
-    error.context = {
-      userMessage,
-      availableContext: ['conversation_history', 'canvas_state'],
-      suggestedActions: ['retry_analysis', 'use_fallback', 'request_clarification']
-    }
-    error.fallbackIntent = fallbackIntent
-    error.recoverable = true
-    
-    return error
-  }
+
 }

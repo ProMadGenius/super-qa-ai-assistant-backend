@@ -671,7 +671,7 @@ describe('DependencyAnalyzer', () => {
           conflicts: [{
             type: 'inconsistent_content' as const,
             severity: 'critical' as const,
-            affectedSections: ['acceptanceCriteria'] as const,
+            affectedSections: ['acceptanceCriteria'] as any,
             description: 'Critical conflict',
             currentState: 'Bad',
             expectedState: 'Good',
@@ -720,7 +720,7 @@ describe('DependencyAnalyzer', () => {
           conflicts: [{
             type: 'missing_dependency' as const,
             severity: 'major' as const,
-            affectedSections: ['testCases'] as const,
+            affectedSections: ['testCases'] as any,
             description: 'Major issue',
             currentState: 'Missing',
             expectedState: 'Present',
@@ -802,7 +802,7 @@ describe('DependencyAnalyzer', () => {
             {
               type: 'missing_dependency' as const,
               severity: 'major' as const,
-              affectedSections: ['testCases'] as const,
+              affectedSections: ['testCases'] as any,
               description: 'Auto-resolvable',
               currentState: 'Missing',
               expectedState: 'Present',
@@ -812,7 +812,7 @@ describe('DependencyAnalyzer', () => {
             {
               type: 'inconsistent_content' as const,
               severity: 'major' as const,
-              affectedSections: ['acceptanceCriteria'] as const,
+              affectedSections: ['acceptanceCriteria'] as any,
               description: 'Manual resolution needed',
               currentState: 'Inconsistent',
               expectedState: 'Consistent',
@@ -940,7 +940,12 @@ function createMockCanvas(): QACanvasDocument {
           mobile: false,
           accessibility: false
         },
-        testCaseFormat: 'gherkin'
+        testCaseFormat: 'gherkin',
+        autoRefresh: true,
+        includeComments: true,
+        includeImages: true,
+        operationMode: 'offline',
+        showNotifications: true
       },
       ticketId: 'TEST-123',
       documentVersion: '1.0'

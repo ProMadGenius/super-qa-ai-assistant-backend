@@ -69,31 +69,31 @@ export interface StreamingChunk {
 export interface UnifiedResponse {
   // Core response data
   type: 'modification' | 'clarification' | 'information' | 'rejection' | 'fallback'
-  
+
   // Intent analysis metadata
   intent?: IntentType
   confidence?: number
   targetSections?: CanvasSection[]
   sessionId?: string
-  
+
   // Response-specific data
   updatedDocument?: any // For modification responses
   questions?: any[] // For clarification responses
   response?: string // For information responses
   changesSummary?: string // For all response types
-  
+
   // Additional metadata
   relevantSections?: CanvasSection[]
   citations?: any[]
   suggestedFollowUps?: string[]
   suggestedActions?: string[]
   dependencyAnalysis?: any
-  
+
   // Processing metadata
   processingTime?: number
   requestId?: string
   timestamp?: string
-  
+
   // Error handling
   error?: string
   fallbackReason?: string
@@ -131,10 +131,10 @@ export class RequestRouter {
     try {
       // Extract request context
       const context = await RequestPreprocessor.extractRequestContext(request)
-      
+
       // Process request with retries
       let middlewareResponse: MiddlewareResponse
-      
+
       while (retryCount <= this.config.maxRetries) {
         try {
           middlewareResponse = await this.middleware.processRequest(context)
@@ -188,9 +188,9 @@ export class RequestRouter {
 
       // Return error response or fallback
       if (this.config.enableFallback) {
-        return this.generateFallbackResponse(error, requestId)
+        return this.generateFallbackResponse(error as Error, requestId)
       } else {
-        return handleAIError(error, requestId)
+        return handleAIError(error as Error, requestId)
       }
     }
   }
@@ -198,7 +198,7 @@ export class RequestRouter {
   /**
    * Generate response based on middleware result
    */
-  private async generateResponse(
+  public async generateResponse(
     middlewareResponse: MiddlewareResponse,
     context: RequestContext,
     requestId: string
@@ -315,7 +315,7 @@ export class RequestRouter {
     middlewareResponse: MiddlewareResponse,
     requestId: string
   ): Promise<NextResponse> {
-    const rejectionMessage = middlewareResponse.data.rejectionMessage || 
+    const rejectionMessage = middlewareResponse.data.rejectionMessage ||
       "I'm designed to help with QA documentation and testing-related questions for your Jira tickets."
 
     const unifiedResponse: UnifiedResponse = {
@@ -381,7 +381,7 @@ export class RequestRouter {
   private generateStreamingResponse(response: UnifiedResponse): NextResponse {
     // Create a readable stream for streaming responses
     const encoder = new TextEncoder()
-    
+
     const stream = new ReadableStream({
       start(controller) {
         // Send initial chunk
@@ -458,7 +458,7 @@ export class RequestRouter {
    */
   private recordMetrics(metrics: RoutingMetrics): void {
     this.metrics.push(metrics)
-    
+
     // Keep only last 1000 metrics to prevent memory leaks
     if (this.metrics.length > 1000) {
       this.metrics = this.metrics.slice(-1000)
@@ -563,17 +563,17 @@ export async function enhanceExistingRoute(
   config: Partial<RouterConfig> = {}
 ): Promise<NextResponse> {
   const router = new RequestRouter(config)
-  
+
   try {
     // Try intent-aware routing first
     const context = await RequestPreprocessor.extractRequestContext(request)
     const middlewareResponse = await router['middleware'].processRequest(context)
-    
+
     // If intent analysis suggests proceeding with original logic, do so
     if (middlewareResponse.type === 'modification' || middlewareResponse.type === 'fallback') {
       return await originalHandler(request)
     }
-    
+
     // Otherwise, use intent-aware response
     return await router.generateResponse(middlewareResponse, context, uuidv4())
   } catch (error) {
