@@ -140,7 +140,11 @@ async function testAnalyzeTicketTiming() {
 }
 
 console.log('🔧 Testing analyze-ticket performance improvements...');
-console.log('📈 Focus: Parallel image processing + detailed timing');
-console.log('🎯 Goal: Reduce response time from ~30s to <20s\n');
+console.log('📈 Focus: Parallel image processing + section-based generation + detailed timing');
+console.log('🎯 Goals:');
+console.log('   - Reduce response time from ~30s to <15s');
+console.log('   - Parallel image processing (60-70% faster)');
+console.log('   - Section-based generation (50-70% faster)');
+console.log('   - Detailed timing breakdown for bottleneck identification\n');
 
 testAnalyzeTicketTiming();
