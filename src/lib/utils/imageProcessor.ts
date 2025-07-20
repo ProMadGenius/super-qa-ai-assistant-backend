@@ -82,11 +82,17 @@ export async function processAndUploadImages(
     await mkdir(uploadsDir, { recursive: true })
   }
 
-  const processedImages: ProcessedImage[] = []
+  console.log(`🚀 Processing ${images.length} images in parallel...`)
+  const startTime = Date.now()
 
-  for (const image of images) {
+  // Process all images in parallel for better performance
+  const imagePromises = images.map(async (image, index) => {
+    const imageStartTime = Date.now()
+    
     try {
       const { data, mime, name, source } = image
+
+      console.log(`🖼️ [${index + 1}/${images.length}] Starting ${name}...`)
 
       // Handle different base64 formats
       let base64Data: string
@@ -99,31 +105,33 @@ export async function processAndUploadImages(
         base64Data = data
         mimeType = mime
       } else {
-        console.warn(`❌ Skipping invalid image format: ${name}`)
-        continue
+        console.warn(`❌ [${index + 1}] Skipping invalid image format: ${name}`)
+        return null
       }
 
       // Convert base64 to buffer
+      const bufferStartTime = Date.now()
       const originalBuffer = Buffer.from(base64Data, 'base64')
       const originalSize = originalBuffer.length
+      const bufferTime = Date.now() - bufferStartTime
 
-      console.log(`🖼️ Processing ${name} (${(originalSize / 1024).toFixed(1)}KB, ${mimeType})`)
-
-
+      console.log(`🖼️ [${index + 1}] ${name} buffer created (${(originalSize / 1024).toFixed(1)}KB, ${mimeType}) - ${bufferTime}ms`)
 
       // Check if image exceeds size limit
       const maxSizeBytes = config.maxSizeMB * 1024 * 1024
       if (originalSize > maxSizeBytes) {
-        console.warn(`⚠️ Image ${name} exceeds size limit (${(originalSize / 1024 / 1024).toFixed(1)}MB > ${config.maxSizeMB}MB)`)
-        continue
+        console.warn(`⚠️ [${index + 1}] Image ${name} exceeds size limit (${(originalSize / 1024 / 1024).toFixed(1)}MB > ${config.maxSizeMB}MB)`)
+        return null
       }
 
       // Initialize Sharp instance
+      const sharpStartTime = Date.now()
       let sharpInstance = sharp(originalBuffer)
 
       // Get original image metadata
       const metadata = await sharpInstance.metadata()
-      console.log(`📏 Original dimensions: ${metadata.width}x${metadata.height}`)
+      const metadataTime = Date.now() - sharpStartTime
+      console.log(`📏 [${index + 1}] Original dimensions: ${metadata.width}x${metadata.height} - ${metadataTime}ms`)
 
       let processed = false
       const processingInfo = {
@@ -142,7 +150,7 @@ export async function processAndUploadImages(
           })
           processingInfo.resized = true
           processed = true
-          console.log(`📐 Resizing to max ${config.maxWidth}x${config.maxHeight}`)
+          console.log(`📐 [${index + 1}] Resizing to max ${config.maxWidth}x${config.maxHeight}`)
         }
       }
 
@@ -176,9 +184,10 @@ export async function processAndUploadImages(
       // IMPORTANT: Only apply processing if explicitly enabled
       // By default, save the original image without any processing
       let processedBuffer: Buffer
+      const processingStartTime = Date.now()
 
       if (config.compressionEnabled || config.resizeEnabled || processingInfo.resized) {
-        console.log(`🔧 Applying processing (compression=${config.compressionEnabled}, resize=${processingInfo.resized})`)
+        console.log(`🔧 [${index + 1}] Applying processing (compression=${config.compressionEnabled}, resize=${processingInfo.resized})`)
 
         // Apply format-specific processing only if needed
         if (outputFormat === 'jpeg') {
@@ -208,11 +217,13 @@ export async function processAndUploadImages(
 
         processedBuffer = await sharpInstance.toBuffer()
       } else {
-        console.log(`📋 Saving original image without processing`)
+        console.log(`📋 [${index + 1}] Saving original image without processing`)
         // Save original image without any processing
         processedBuffer = originalBuffer
         processed = false
       }
+
+      const processingTime = Date.now() - processingStartTime
 
       // Generate unique filename
       const uniqueId = uuidv4()
@@ -220,18 +231,22 @@ export async function processAndUploadImages(
       const filepath = path.join(uploadsDir, filename)
 
       // Save the processed image (using the processedBuffer from above)
+      const saveStartTime = Date.now()
       await writeFile(filepath, processedBuffer)
-      console.log(`💾 Saved ${filename} (${(processedBuffer.length / 1024).toFixed(1)}KB)`)
+      const saveTime = Date.now() - saveStartTime
+      console.log(`💾 [${index + 1}] Saved ${filename} (${(processedBuffer.length / 1024).toFixed(1)}KB) - ${saveTime}ms`)
 
       // Get final image metadata
+      const finalMetadataStartTime = Date.now()
       const finalMetadata = await sharp(processedBuffer).metadata()
+      const finalMetadataTime = Date.now() - finalMetadataStartTime
 
       // Create URLs
       const publicUrl = `/uploads/${filename}`
       const baseUrl = process.env.API_BASE_URL || 'http://localhost:3000'
       const absoluteUrl = `${baseUrl}${publicUrl}`
 
-      processedImages.push({
+      const result = {
         originalName: name,
         filename,
         url: publicUrl,
@@ -246,22 +261,34 @@ export async function processAndUploadImages(
         },
         processed,
         processingInfo: processed ? processingInfo : undefined
-      })
+      }
 
       const sizeDiff = originalSize - processedBuffer.length
       const sizeReduction = ((sizeDiff / originalSize) * 100).toFixed(1)
+      const totalImageTime = Date.now() - imageStartTime
 
-      console.log(`✅ Processed ${name}:`)
+      console.log(`✅ [${index + 1}] Processed ${name} in ${totalImageTime}ms:`)
       console.log(`   📁 Saved as: ${filename}`)
       console.log(`   📏 Final size: ${(processedBuffer.length / 1024).toFixed(1)}KB (${sizeReduction}% reduction)`)
       console.log(`   📐 Final dimensions: ${finalMetadata.width}x${finalMetadata.height}`)
       console.log(`   🔧 Processing applied: ${processed ? 'Yes' : 'No'}`)
+      console.log(`   ⏱️  Timings: buffer=${bufferTime}ms, metadata=${metadataTime}ms, processing=${processingTime}ms, save=${saveTime}ms, finalMeta=${finalMetadataTime}ms`)
+
+      return result
 
     } catch (error) {
-      console.error(`❌ Failed to process image ${image.name}:`, error)
-      // Continue with other images
+      const totalImageTime = Date.now() - imageStartTime
+      console.error(`❌ [${index + 1}] Failed to process image ${image.name} after ${totalImageTime}ms:`, error)
+      return null
     }
-  }
+  })
+
+  // Wait for all images to process in parallel
+  const results = await Promise.all(imagePromises)
+  const processedImages = results.filter((result): result is ProcessedImage => result !== null)
+  
+  const totalTime = Date.now() - startTime
+  console.log(`🎯 Parallel image processing completed: ${processedImages.length}/${images.length} images processed in ${totalTime}ms`)
 
   return processedImages
 }

@@ -44,10 +44,16 @@ export async function OPTIONS(request: NextRequest) {
 export async function POST(request: NextRequest) {
   // Generate a unique request ID for tracking and debugging
   const requestId = uuidv4()
+  const requestStartTime = Date.now()
+
+  console.log(`🚀 [${requestId}] Starting analyze-ticket request...`)
 
   try {
     // Parse and validate the request body
+    const parseStartTime = Date.now()
     const body = await request.json()
+    const parseTime = Date.now() - parseStartTime
+    console.log(`📋 [${requestId}] Request parsing completed in ${parseTime}ms`)
 
     // Debug: Log the received data structure
     console.log('🔍 Received request body structure:')
@@ -64,7 +70,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const validationStartTime = Date.now()
     const validationResult = validateTicketAnalysisPayload(body)
+    const validationTime = Date.now() - validationStartTime
+    console.log(`✅ [${requestId}] Validation completed in ${validationTime}ms`)
 
     if (!validationResult.success) {
       return handleValidationError(validationResult.error.issues, requestId)
@@ -73,6 +82,7 @@ export async function POST(request: NextRequest) {
     const { qaProfile, ticketJson }: TicketAnalysisPayload = validationResult.data
 
     // Document any assumptions we need to make based on the input data
+    const assumptionsStartTime = Date.now()
     const assumptions = []
 
     // Check for potential configuration issues
@@ -110,7 +120,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const assumptionsTime = Date.now() - assumptionsStartTime
+    console.log(`🔍 [${requestId}] Assumptions analysis completed in ${assumptionsTime}ms (${assumptions.length} assumptions)`)
+
     // Build comprehensive system prompt for QA analysis
+    const promptStartTime = Date.now()
     const systemPrompt = `You are a world-class QA analyst tasked with creating comprehensive test documentation. 
 
 Your role is to:
@@ -130,8 +144,9 @@ Always follow these principles:
     let imageAttachments: any[] = []
     let commentImages: any[] = []
 
+    const imageProcessingStartTime = Date.now()
     if (qaProfile.includeImages) {
-      console.log('🖼️ Processing images (includeImages = true)...')
+      console.log(`🖼️ [${requestId}] Processing images (includeImages = true)...`)
 
       // Prepare images for upload
       const attachmentImages = prepareAttachmentImages(ticketJson.attachments)
@@ -147,8 +162,10 @@ Always follow these principles:
         console.log(`🚀 Processing ${allImages.length} images internally...`)
 
         try {
+          const imageUploadStartTime = Date.now()
           uploadedImages = await processAndUploadImages(allImages)
-          console.log(`✅ Successfully processed ${uploadedImages.length} images`)
+          const imageUploadTime = Date.now() - imageUploadStartTime
+          console.log(`✅ [${requestId}] Successfully processed ${uploadedImages.length} images in ${imageUploadTime}ms`)
 
           // Log processed image details
           uploadedImages.forEach((img: any, i: number) => {
@@ -168,13 +185,14 @@ Always follow these principles:
 
           console.log(`📊 Final counts: ${imageAttachments.length} attachments, ${commentImages.length} comments`)
         } catch (uploadError) {
-          console.error('❌ Failed to process images:', uploadError)
+          const imageUploadTime = Date.now() - imageProcessingStartTime
+          console.error(`❌ [${requestId}] Failed to process images after ${imageUploadTime}ms:`, uploadError)
           // Continue without images
           imageAttachments = []
           commentImages = []
         }
       } else {
-        console.log('ℹ️ No images to process')
+        console.log(`ℹ️ [${requestId}] No images to process`)
       }
     } else {
       // Just get image info without uploading
@@ -183,6 +201,9 @@ Always follow these principles:
       )
       commentImages = ticketJson.comments.flatMap(comment => comment.images || [])
     }
+
+    const imageProcessingTime = Date.now() - imageProcessingStartTime
+    console.log(`🖼️ [${requestId}] Image processing phase completed in ${imageProcessingTime}ms`)
 
     // Build detailed analysis prompt
     const analysisPrompt = `You are a world-class QA analyst. Analyze this Jira ticket CAREFULLY and create comprehensive QA documentation.
@@ -279,6 +300,9 @@ Your analysis should demonstrate that you understand not just what the problem i
 
 Generate a complete QACanvasDocument with all sections properly filled out.`
 
+    const promptTime = Date.now() - promptStartTime
+    console.log(`📝 [${requestId}] Prompt construction completed in ${promptTime}ms`)
+
     // Enhance system prompt with uncertainty handling if needed
     let enhancedSystemPrompt = systemPrompt
     if (assumptions.length > 0) {
@@ -309,12 +333,12 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
     }
 
     // Generate structured QA documentation using AI
-    const startTime = Date.now()
+    const aiGenerationStartTime = Date.now()
+    console.log(`🤖 [${requestId}] Starting AI document generation...`)
 
     try {
       // Debug: Log the schema being sent to AI providers
-      console.log('Schema being sent to AI providers:')
-      console.log(JSON.stringify(qaCanvasDocumentSchema, null, 2))
+      console.log(`📋 [${requestId}] Schema being sent to AI providers`)
 
       // Use the new generateQADocumentWithFailover function with image support
       const generatedDocument = await generateQADocumentWithImages<QACanvasDocument>(
@@ -328,7 +352,8 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
           maxTokens: 4000
         }
       );
-      const generationTime = Date.now() - startTime
+      const generationTime = Date.now() - aiGenerationStartTime
+      console.log(`🤖 [${requestId}] AI document generation completed in ${generationTime}ms`)
 
       // Debug: Log the generated document structure
       console.log('Generated document structure:', JSON.stringify(generatedDocument, null, 2))
@@ -353,6 +378,7 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
       }
 
       // Enhance the generated document with metadata
+      const enhancementStartTime = Date.now()
       const enhancedDocument: QACanvasDocument = {
         ...generatedDocument,
         metadata: {
@@ -373,6 +399,20 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
         }
       }
 
+      const enhancementTime = Date.now() - enhancementStartTime
+      const totalRequestTime = Date.now() - requestStartTime
+
+      console.log(`✅ [${requestId}] Document enhancement completed in ${enhancementTime}ms`)
+      console.log(`🎯 [${requestId}] TOTAL REQUEST TIME: ${totalRequestTime}ms`)
+      console.log(`📊 [${requestId}] Timing breakdown:`)
+      console.log(`   - Parsing: ${parseTime}ms`)
+      console.log(`   - Validation: ${validationTime}ms`)
+      console.log(`   - Assumptions: ${assumptionsTime}ms`)
+      console.log(`   - Prompt construction: ${promptTime}ms`)
+      console.log(`   - Image processing: ${imageProcessingTime}ms`)
+      console.log(`   - AI generation: ${generationTime}ms`)
+      console.log(`   - Enhancement: ${enhancementTime}ms`)
+
       // Return the generated QA documentation with CORS headers
       return NextResponse.json(enhancedDocument, {
         status: 200,
@@ -383,13 +423,15 @@ ${assumptions.map(a => `- ${a.description}`).join('\n')}
         }
       })
     } catch (error) {
-      console.error('Error generating complete document:', error)
+      const generationTime = Date.now() - aiGenerationStartTime
+      console.error(`❌ [${requestId}] Error generating complete document after ${generationTime}ms:`, error)
       // Don't attempt partial generation, just throw the error to be handled by the outer catch
       throw error
     }
 
   } catch (error) {
-    console.error('Error in /api/analyze-ticket:', error)
+    const totalRequestTime = Date.now() - requestStartTime
+    console.error(`❌ [${requestId}] Error in /api/analyze-ticket after ${totalRequestTime}ms:`, error)
     return handleAIError(error, requestId)
   }
 }
